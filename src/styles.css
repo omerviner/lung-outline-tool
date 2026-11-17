@@ -1,0 +1,25 @@
+:root { font-family: system-ui, sans-serif; color: #1c1f23; }
+body { margin: 0; background: #f4f5f7; }
+main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 1.25rem; margin: 0 0 4px; }
+.note { color: #5a626b; font-size: .85rem; margin: 0 0 12px; }
+.layout { display: grid; grid-template-columns: minmax(300px, 560px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+.card { background: #fff; border: 1px solid #dfe2e6; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.viewer { position: relative; width: 100%; aspect-ratio: 1; background: #000; border-radius: 6px; overflow: hidden; touch-action: none; cursor: crosshair; user-select: none; }
+.viewer canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.viewer .overlay { image-rendering: pixelated; pointer-events: none; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+button, select, input { font: inherit; }
+button { padding: 4px 10px; border: 1px solid #b8bec6; border-radius: 6px; background: #fff; cursor: pointer; }
+button.on { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+button.primary { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+.drop { border: 2px dashed #b8bec6; border-radius: 8px; padding: 24px; text-align: center; color: #5a626b; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.stat b { display: block; font-size: 1.25rem; }
+.stat span { color: #5a626b; font-size: .8rem; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: .8rem; width: 100%; }
+th, td { border: 1px solid #dfe2e6; padding: 2px 6px; white-space: nowrap; text-align: left; }
+td input, td select { width: 90px; border: 1px solid #e3e6ea; }
+.warn { color: #9a3412; }
