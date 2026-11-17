@@ -265,3 +265,28 @@ tbody tr { scroll-snap-align: start; }
 .vslider::-moz-range-progress { background: transparent; }
 .vslider::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; background: var(--deep); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
 .vslider:focus-visible { outline: 2px solid var(--teal); outline-offset: 4px; border-radius: 4px; }
+
+/* manual window, several outlines, pausable timer, time log */
+.wlpanel { left: 14px; top: 62px; width: 220px; padding: 10px 12px; display: grid; gap: 6px; z-index: 6; }
+.wlpanel input[type=range] { width: 100%; accent-color: var(--deep); }
+.wlpanel .optlabel { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); }
+.timer { gap: 2px; }
+.timebtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.timebtn:hover { background: rgba(255,255,255,.14); }
+.timer.paused { color: #f3c98b; }
+.olist { display: grid; gap: 4px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--sand); }
+.olhead { display: flex; align-items: center; justify-content: space-between; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.olchip { display: flex; align-items: center; border: 1px solid var(--sand); border-radius: 8px; background: var(--ivory); }
+.olchip.on { border-color: var(--deep); box-shadow: inset 0 0 0 1px var(--deep); }
+.olpick { flex: 1; display: flex; justify-content: space-between; gap: 8px; border: 0; background: transparent; padding: 5px 8px; cursor: pointer; font: inherit; font-size: .8rem; color: inherit; }
+.olpick span { color: var(--muted); }
+.olx { border: 0; background: transparent; cursor: pointer; font-size: 1rem; line-height: 1; padding: 4px 8px; color: var(--muted); }
+.olx:hover { color: #b3402f; }
+.timepanel { width: min(620px, calc(100vw - 24px)); }
+.timepanel .tnote { margin: 0; color: var(--muted); line-height: 1.4; }
+.timepanel .tsum { margin: 0; font-weight: 600; color: var(--deep); }
+.ttable { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.ttable th, .ttable td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--sand); white-space: nowrap; }
+.ttable th:first-child, .ttable td:first-child { text-align: left; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.ttable tr.now td { font-weight: 600; }
+.ttable td:first-child { min-width: 170px; }

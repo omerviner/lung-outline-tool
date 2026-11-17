@@ -19,13 +19,33 @@ const TOOLS = [
   { id: 'add', icon: 'brush', label: 'Brush', key: 'B', tip: 'Paint area into the outline on this slice. Hold Shift to erase.', hint: 'Paint to add to the outline. Hold Shift to erase' },
   { id: 'erase', icon: 'eraser', label: 'Erase', key: 'E', tip: 'Remove area from the outline on this slice.', hint: 'Paint to remove from the outline' },
 ];
+// time model from Daniel's estimates (notes/time_saved_tracker.md): minutes by hand for a scan with n tumours
+const MODEL = { findMin: 15, perTumourMin: 11 }; // finding 10-20 per scan; per tumour axes 3 + typing 4 + 1 in 5 full outlines x 20
+const modelMinutes = (n) => MODEL.findMin + MODEL.perTumourMin * n;
+const fmt1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+
+/** Binary mask over slices z0..z1 as alternating run lengths (starting with zeros): small enough for localStorage. */
+function rleEncode(mask, z0, z1, sl) {
+  const runs = []; let cur = 0, n = 0;
+  for (let i = z0 * sl, e = (z1 + 1) * sl; i < e; i++) {
+    if (mask[i] === cur) n++; else { runs.push(n); cur = mask[i]; n = 1; }
+  }
+  runs.push(n);
+  return runs;
+}
+function rleDecode(runs, z0, total, sl) {
+  const out = new Uint8Array(total); let i = z0 * sl, v = 0;
+  for (const n of runs) { if (v) out.fill(1, i, i + n); i += n; v ^= 1; }
+  return out;
+}
+const rleVoxels = (runs) => runs.reduce((s, n, k) => s + (k % 2 ? n : 0), 0);
 const store = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
 const SHORTCUTS = [ // [group, [[keys, what it does], ...]]; every key is its own chip
   ['Tools', [[['O', 'B', 'E'], 'Outline, brush, erase'], [['[', ']'], 'Brush size'], [['{', '}'], 'Brush depth (slices)'], [['Shift'], 'Hold to erase with the brush']]],
-  ['Edit', [[['Ctrl/Cmd+Z'], 'Undo'], [['Del'], 'Clear the outline'], [['Enter'], 'Add a row']]],
-  ['View', [[['W'], 'Lung or soft window'], [['H'], 'Hold to hide the outline'], [['M'], 'Go to the measured slice'], [['+', '-', '0'], 'Zoom in, out, fit'], [['Ctrl/Cmd+scroll'], 'Zoom (or pinch)'], [['Space+drag'], 'Pan']]],
+  ['Edit', [[['Ctrl/Cmd+Z'], 'Undo'], [['Del'], 'Clear the outline'], [['Enter'], 'Add a row'], [['N'], 'Start another tumour']]],
+  ['View', [[['W'], 'Lung or soft window'], [['P'], 'Pause or resume the timer'], [['H'], 'Hold to hide the outline'], [['M'], 'Go to the measured slice'], [['+', '-', '0'], 'Zoom in, out, fit'], [['Ctrl/Cmd+scroll'], 'Zoom (or pinch)'], [['Space+drag'], 'Pan']]],
   ['Slices', [[['scroll'], 'Change slice'], [['↑', '↓'], 'Change slice']]],
 ];
 
@@ -65,6 +85,45 @@ function LungChip({ s }) {
       {(s.phase === 'loading' || s.phase === 'running') && <i className="bar"><i style={{ width: `${pct}%` }} /></i>}
       {text}
     </span>
+  );
+}
+
+/** Time log: measured active minutes per scan next to the by-hand model (modelled from Daniel's estimates). */
+function TimePanel({ log, nowKey, liveMin, onClear }) {
+  const list = Object.entries(log).map(([key, e]) => {
+    const total = key === nowKey ? liveMin : e.ms / 60000, n = e.rows.length;
+    const find = e.first == null ? null : Math.min(total, e.first / 60000);
+    const hand = n ? modelMinutes(n) : null;
+    return { key, label: e.label, n, find, work: find == null ? null : total - find, total, hand, saved: hand == null ? null : hand - total, updated: e.updated };
+  }).sort((a, b) => b.updated - a.updated);
+  const done = list.filter((r) => r.hand != null);
+  const sumHand = done.reduce((s, r) => s + r.hand, 0), sumTool = done.reduce((s, r) => s + r.total, 0);
+  const dash = (v) => (v == null ? '–' : fmt1(v));
+  const csv = () => {
+    const head = 'Scan,Tumours,Finding (min),Outline and rows (min),Total with tool (min),By hand, modelled (min),Saved (min)';
+    const body = list.map((r) => [`"${r.label}"`, r.n, dash(r.find), dash(r.work), fmt1(r.total), dash(r.hand), dash(r.saved)].join(','));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([[head, ...body].join('\n')], { type: 'text/csv' })); a.download = 'time_log.csv'; a.click();
+  };
+  return (
+    <div className="help timepanel" role="dialog" aria-label="Time log">
+      <b>Time log</b>
+      <p className="tnote">Active minutes on each scan (the timer stops when paused), from loading to the last row. "By hand" is a model from Daniel's estimates: {MODEL.findMin} min to find, plus {MODEL.perTumourMin} min per tumour. It is not a stopwatch measurement.</p>
+      {list.length ? (
+        <table className="ttable">
+          <thead><tr><th>Scan</th><th>Tumours</th><th>Finding</th><th>Outline + rows</th><th>With tool</th><th>By hand</th><th>Saved</th></tr></thead>
+          <tbody>
+            {list.map((r) => (
+              <tr key={r.key} className={r.key === nowKey ? 'now' : ''}>
+                <td title={r.label}>{r.label}</td><td>{r.n}</td><td>{dash(r.find)}</td><td>{dash(r.work)}</td><td>{fmt1(r.total)}</td><td>{dash(r.hand)}</td><td>{dash(r.saved)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p className="tnote">No scans yet.</p>}
+      {done.length > 0 && <p className="tsum">{done.length} scan{done.length > 1 ? 's' : ''} with rows: {fmt1(sumTool)} min with the tool vs {fmt1(sumHand)} min by hand ({Math.round((100 * (sumHand - sumTool)) / sumHand)}% less, modelled).</p>}
+      <div className="modalbtns"><button className="btn" disabled={!list.length} onClick={csv}>Download CSV</button><button className="btn ghost" disabled={!list.length} onClick={onClear}>Clear log</button></div>
+    </div>
   );
 }
 
@@ -128,6 +187,13 @@ export default function App() {
   const [timepoint, setTimepoint] = useState(() => store('timepoint', 'T0'));
   const [includeVolume, setIncludeVolume] = useState(true);
   const [minutes, setMinutes] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
+  const [timeLog, setTimeLog] = useState(() => store('timelog', {}));
+  const [wl, setWl] = useState(null); // manual window {level, width}; null = the Lung or Soft preset
+  const [wlOpen, setWlOpen] = useState(false);
+  const [olView, setOlView] = useState([]); // outlines of this scan: [{ id, label, vol }]
+  const [activeId, setActiveId] = useState(null);
   const [flash, setFlash] = useState(-1);
   const [zoom, setZoom] = useState(1);
   const [gesture, setGesture] = useState(false);
@@ -143,17 +209,38 @@ export default function App() {
   // plus the user's brush `add` and `erase`. `mask` is the combined result that is shown and measured.
   const L = useRef({ base: null, add: null, erase: null, mask: null, zr: null, baseZr: null, addZr: null, edited: false });
   const seriesRef = useRef(null), workerRef = useRef(null), inflight = useRef(false), queued = useRef(null), reqId = useRef(0);
-  const last = useRef(null), startedAt = useRef(0), hist = useRef([]), stroke = useRef(null), raf = useRef(0);
+  const last = useRef(null), hist = useRef([]), stroke = useRef(null), raf = useRef(0);
   const autoR = useRef(0), exactTimer = useRef(0), pendingExact = useRef(false);
   const lungWorkerRef = useRef(null), lungId = useRef(0), requestRef = useRef(null);
   const depthRef = useRef(1);
+  // several outlines per scan: `items` hold the saved ones (run-length coded); the active one lives in `L`
+  const ol = useRef({ items: [], active: null, next: 1, key: '' });
+  // active time on the scan: runs only while not paused; saved so a reload does not lose it
+  const clock = useRef({ ms: 0, since: 0, first: null, rows: [] });
   const tolRef = useRef(tol), tolSession = useRef(false), tolTimer = useRef(0);
   tolRef.current = tol;
   depthRef.current = brushDepth;
 
   useEffect(() => save('rows', rows), [rows]);
   useEffect(() => { save('initials', initials); save('timepoint', timepoint); }, [initials, timepoint]);
-  useEffect(() => { const t = setInterval(() => startedAt.current && setMinutes((Date.now() - startedAt.current) / 60000), 5000); return () => clearInterval(t); }, []);
+  // ---- active time (pausable) ----
+  const elapsedMs = () => clock.current.ms + (clock.current.since ? Date.now() - clock.current.since : 0);
+  const saveTime = useCallback(() => {
+    const k = ol.current.key;
+    if (!k) return;
+    const c = clock.current, ms = c.ms + (c.since ? Date.now() - c.since : 0);
+    setTimeLog((prev) => { const next = { ...prev, [k]: { label: ol.current.label, ms, first: c.first, rows: c.rows, updated: Date.now() } }; save('timelog', next); return next; });
+  }, []);
+  const togglePause = useCallback(() => {
+    const c = clock.current;
+    if (!ol.current.key) return;
+    if (c.since) { c.ms += Date.now() - c.since; c.since = 0; setPaused(true); } else { c.since = Date.now(); setPaused(false); }
+    setMinutes(elapsedMs() / 60000); saveTime();
+  }, [saveTime]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setInterval(() => { if (!ol.current.key) return; setMinutes(elapsedMs() / 60000); if (clock.current.since) saveTime(); }, 2000);
+    return () => clearInterval(t);
+  }, [saveTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { const el = tableRef.current; if (el && rows.length) el.scrollTop = el.scrollHeight; }, [rows.length]);
 
@@ -222,6 +309,53 @@ export default function App() {
     setInfo(''); bump();
   };
 
+  // ---- several outlines per scan ----
+  const minId = useRef(0);
+  const resetPending = () => { clearTimeout(exactTimer.current); pendingExact.current = false; queued.current = null; minId.current = reqId.current + 1; setComputing(false); };
+  const olSync = () => { const o = ol.current; setOlView(o.items.map((it) => ({ id: it.id, label: it.label, vol: it.vol }))); setActiveId(o.active); };
+  const olPersist = () => { const o = ol.current; if (o.key) save(`outlines:${o.key}`, { next: o.next, items: o.items.map(({ id, label, zr, rle }) => ({ id, label, zr, rle })) }); };
+  const snapshot = () => { // copy the live outline into its saved entry
+    const o = ol.current, s = seriesRef.current, l = L.current, it = o.items.find((x) => x.id === o.active);
+    if (!it || !s || !l.mask) return;
+    const sl = s.gd[1] * s.gd[2];
+    if (l.zr) { it.rle = rleEncode(l.mask, l.zr[0], l.zr[1], sl); it.zr = l.zr.slice(); it.vol = (rleVoxels(it.rle) * s.spDS[0] * s.spDS[1] * s.spDS[2]) / 1000; }
+    if (!l.zr || !it.vol) { it.rle = null; it.zr = null; it.vol = 0; }
+  };
+  const loadEntry = (it) => { // make a saved outline the live one: its shape becomes the base layer, brush layers start empty
+    const s = seriesRef.current, l = L.current, n = l.mask.length, sl = s.gd[1] * s.gd[2];
+    if (it.rle && it.zr) { l.base = rleDecode(it.rle, it.zr[0], n, sl); l.mask = l.base.slice(); l.zr = l.baseZr = it.zr.slice(); }
+    else { l.base = new Uint8Array(n); l.mask = new Uint8Array(n); l.zr = l.baseZr = null; }
+    l.add = new Uint8Array(n); l.erase = new Uint8Array(n); l.addZr = null; l.edited = false;
+    hist.current = []; last.current = null; autoR.current = 0;
+  };
+  const switchTo = (id) => {
+    const o = ol.current, it = o.items.find((x) => x.id === id);
+    if (!it || id === o.active) return;
+    snapshot(); o.active = id; resetPending(); loadEntry(it); olPersist(); olSync(); setInfo(''); bump();
+  };
+  const newOutline = () => {
+    const o = ol.current;
+    if (!seriesRef.current) return;
+    snapshot();
+    let n = 1; while (o.items.some((x) => x.label === `N${n}`)) n++;
+    const it = { id: o.next++, label: `N${n}`, zr: null, rle: null, vol: 0 };
+    o.items.push(it); o.active = it.id; resetPending(); loadEntry(it); olPersist(); olSync(); setInfo('New tumour: click it to outline.'); setTool('outline'); bump();
+  };
+  const removeOutline = (id) => {
+    const o = ol.current;
+    o.items = o.items.filter((x) => x.id !== id);
+    if (id === o.active) {
+      if (!o.items.length) { o.items.push({ id: o.next++, label: 'N1', zr: null, rle: null, vol: 0 }); }
+      o.active = o.items[0].id; resetPending(); loadEntry(o.items[0]); setInfo(''); bump();
+    }
+    olPersist(); olSync();
+  };
+  useEffect(() => { // save the live outline shortly after it stops changing
+    if (!series || !ol.current.active) return undefined;
+    const t = setTimeout(() => { snapshot(); olPersist(); olSync(); }, 700);
+    return () => clearTimeout(t);
+  }, [version, series]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---- worker ----
   const post = useCallback((q) => {
     inflight.current = true; setComputing(true);
@@ -235,6 +369,7 @@ export default function App() {
       const m = e.data;
       if (m.type !== 'result') return;
       inflight.current = false;
+      if (m.id < minId.current) { if (!queued.current) setComputing(false); return; } // result for an outline that was closed
       const l = L.current;
       if (l.mask) {
         const prevZr = l.baseZr; // slices that held the previous outline must be cleared too
@@ -272,6 +407,7 @@ export default function App() {
 
   const onOutline = useCallback((p) => {
     if (p.start) { // a new click starts a new outline: keep it undoable, drop brush edits of the previous one
+      if (clock.current.first == null) { clock.current.first = elapsedMs(); saveTime(); }
       pushBaseHistory();
       const l = L.current; l.add.fill(0); l.erase.fill(0); l.edited = false; l.addZr = null; l.zr = l.baseZr;
     }
@@ -344,7 +480,16 @@ export default function App() {
     seriesRef.current = s; setSeries(s);
     setSliceRaw(Math.floor(v.dims[0] / 2));
     setVersion((k) => k + 1); setInfo('');
-    startedAt.current = Date.now(); setMinutes(0);
+    // outlines and time of this scan are remembered between sessions (matched by patient, series and size)
+    const key = `${v.meta.patientId}|${v.meta.seriesNumber}|${v.dims.join('x')}|${v.meta.studyDate}`;
+    const o = ol.current, saved = store(`outlines:${key}`, null);
+    o.key = key; o.label = `${v.meta.patientId || 'Scan'} · series ${v.meta.seriesNumber}`;
+    o.items = saved && saved.items.length ? saved.items.map((it) => ({ ...it, vol: it.rle ? (rleVoxels(it.rle) * spDS[0] * spDS[1] * spDS[2]) / 1000 : 0 })) : [{ id: 1, label: 'N1', zr: null, rle: null, vol: 0 }];
+    o.next = Math.max(saved ? saved.next : 1, ...o.items.map((x) => x.id + 1)); o.active = o.items[0].id;
+    loadEntry(o.items[0]); olSync();
+    const t0 = store('timelog', {})[key];
+    clock.current = { ms: t0 ? t0.ms : 0, since: Date.now(), first: t0 ? t0.first : null, rows: t0 ? t0.rows : [] };
+    setPaused(false); setMinutes(clock.current.ms / 60000); saveTime();
     setStatus(`${v.meta.patientId || 'Scan'} · ${v.dims[0]} slices · ${v.spacing[1].toFixed(2)} mm pixels · ${v.spacing[0].toFixed(2)} mm slices`);
     const t = v.meta.thickness;
     setWarn(t > 1.3 ? `Slices are ${t.toFixed(2)} mm thick; the lab reads 1.0 to 1.25 mm series.` : '');
@@ -373,13 +518,15 @@ export default function App() {
   }, [openGroup]);
   useEffect(() => { if (import.meta.env.DEV) window.__loadFiles = loadFiles; }, [loadFiles]);
 
+  const winVal = useMemo(() => wl || WINDOWS[win], [wl, win]);
   const m = useMemo(() => (series && L.current.zr ? measure(L.current.mask, series.gd, series.spDS, L.current.zr) : null), [series, version]);
 
   const addRow = () => {
     if (!m) return;
-    const same = rows.filter((r) => r.patientId === series.meta.patientId && r.seriesNumber === series.meta.seriesNumber).length;
+    const cur = ol.current.items.find((x) => x.id === ol.current.active);
+    clock.current.rows = [...clock.current.rows, elapsedMs()]; saveTime();
     setFlash(rows.length); setTimeout(() => setFlash(-1), 1600);
-    setRows((rs) => [...rs, makeRow({ meta: series.meta, spacing: series.spacing, m, noduleId: `N${same + 1}`, timepoint, initials, minutes: (Date.now() - startedAt.current) / 60000, includeVolume })]);
+    setRows((rs) => [...rs, makeRow({ meta: series.meta, spacing: series.spacing, m, noduleId: cur ? cur.label : 'N1', timepoint, initials, minutes: elapsedMs() / 60000, includeVolume })]);
   };
   const edit = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const copy = async () => { await navigator.clipboard.writeText(toTSV(rows, false)); setStatus(`Copied ${rows.length} rows: paste into the sheet.`); };
@@ -390,7 +537,7 @@ export default function App() {
 
   // ---- keyboard: ignore only real text entry, so sliders and checkboxes keep the shortcuts ----
   const act = useRef({});
-  act.current = { undo, clearAll, addRow, setSlice, goMeasured: () => { if (m) setSlice(m.bestSlice); } };
+  act.current = { undo, clearAll, addRow, newOutline, togglePause, setSlice, goMeasured: () => { if (m) setSlice(m.bestSlice); } };
   useEffect(() => {
     const onKey = (e) => {
       const t = e.target, tag = t.tagName;
@@ -407,7 +554,9 @@ export default function App() {
       else if (k === 'b') setTool('add');
       else if (k === 'e') setTool('erase');
       else if (k === 'delete' || k === 'backspace') { e.preventDefault(); act.current.clearAll(); }
-      else if (k === 'w') setWin((w) => (w === 'Lung' ? 'Soft' : 'Lung'));
+      else if (k === 'w') { setWl(null); setWin((w) => (w === 'Lung' ? 'Soft' : 'Lung')); }
+      else if (k === 'n') act.current.newOutline();
+      else if (k === 'p') act.current.togglePause();
       else if (k === 'm') act.current.goMeasured();
       else if (k === 'h' && !e.repeat) setHoldHide(true);
       else if (k === '+' || k === '=') viewerRef.current && viewerRef.current.zoomBy(1.25);
@@ -422,6 +571,17 @@ export default function App() {
     window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKeyUp);
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp); };
   }, []);
+
+  useEffect(() => {
+    if (!timeOpen && !wlOpen) return undefined;
+    const close = (e) => {
+      if (e.type === 'keydown') { if (e.key === 'Escape') { setTimeOpen(false); setWlOpen(false); } return; }
+      if (!e.target.closest('.timepanel, .timer')) setTimeOpen(false);
+      if (!e.target.closest('.wlpanel, .wlbtn')) setWlOpen(false);
+    };
+    window.addEventListener('keydown', close); window.addEventListener('pointerdown', close);
+    return () => { window.removeEventListener('keydown', close); window.removeEventListener('pointerdown', close); };
+  }, [timeOpen, wlOpen]);
 
   useEffect(() => {
     if (!helpOpen) return undefined;
@@ -453,9 +613,15 @@ export default function App() {
         <div className="brandblock product"><div><b>Lung Outline Tool</b><span>Research use only</span></div></div>
         <span className="grow" />
         {series && <LungChip s={lungState} />}
-        {series && <span className="chip timer" title="Minutes on this scan"><Icon name="clock" size={16} /> {minutes.toFixed(1)} min</span>}
+        {series && (
+          <span className={`chip timer ${paused ? 'paused' : ''}`}>
+            <button className="timebtn" title="Time on this scan: open the time log" aria-label="Open the time log" onClick={() => setTimeOpen((o) => !o)}><Icon name="clock" size={16} /> {minutes.toFixed(1)} min{paused ? ' · paused' : ''}</button>
+            <button className="timebtn pausebtn" title={paused ? 'Resume the timer (P)' : 'Pause the timer (P)'} aria-label={paused ? 'Resume the timer' : 'Pause the timer'} onClick={togglePause}><Icon name={paused ? 'play' : 'pause'} size={14} /></button>
+          </span>
+        )}
         <button className="btn helpbtn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => setHelpOpen((o) => !o)}><Icon name="help" size={15} /></button>
         {series && <FolderPicker onFiles={loadFiles} label="Open folder" />}
+        {timeOpen && <TimePanel log={timeLog} nowKey={ol.current.key} liveMin={minutes} rows={rows} onClear={() => { setTimeLog({}); save('timelog', {}); }} />}
         {helpOpen && (
           <div className="help" role="dialog" aria-label="Keyboard shortcuts">
             <b>Keyboard shortcuts</b>
@@ -463,7 +629,7 @@ export default function App() {
               <div key={group} className="hgroup">
                 <div className="hhead">{group}</div>
                 {rows.map(([keys, what]) => (
-                  <div key={what} className="hrow"><span className="keys">{keys.map((k) => <kbd key={k}>{k}</kbd>)}</span><span>{what}</span></div>
+                  <div key={keys.join('+')} className="hrow"><span className="keys">{keys.map((k) => <kbd key={k}>{k}</kbd>)}</span><span>{what}</span></div>
                 ))}
               </div>
             ))}
@@ -475,7 +641,7 @@ export default function App() {
         {series ? (
           <>
               <Viewer ref={viewerRef} orient={orientationLabels(series.meta.iop)} onViewChange={setZoom} onGesture={(on) => { setGesture(on); if (!on && pendingExact.current && last.current) { clearTimeout(exactTimer.current); pendingExact.current = false; requestRef.current(last.current, undefined, false); } }} showOutline={!(hidePinned || holdHide)} axes={axesShow} vol={series.vol} dims={series.dims} spacing={series.spacing} gd={series.gd} mask={L.current.mask} version={version}
-                slice={slice} win={WINDOWS[win]} tool={tool} onSlice={setSlice} onOutline={onOutline} onBrush={paint} />
+                slice={slice} win={winVal} tool={tool} onSlice={setSlice} onOutline={onOutline} onBrush={paint} />
             {status && (
               <div className="scaninfo" title={status}>
                 {status.split(' · ').map((part, i) => <span key={i} className={i === 0 ? 'first' : ''}>{part}</span>)}
@@ -493,10 +659,21 @@ export default function App() {
               <div className="toolwrap"><button className={`vb ${hidePinned ? 'on' : ''}`} aria-label="Show or hide the outline" onClick={() => setHidePinned((h) => !h)}><Icon name={hidePinned ? 'eyeoff' : 'eye'} size={18} /></button><Tip down title="Outline on or off" keys="H" text="Hold H to peek at the raw image. Click to keep the outline hidden." /></div>
               <div className="vsep" />
               <div className="toolwrap">
-                <div className="seg">{Object.keys(WINDOWS).map((w) => <button key={w} className={win === w ? 'on' : ''} aria-label={`${w} window`} onClick={() => setWin(w)}>{w}</button>)}</div>
+                <div className="seg">{Object.keys(WINDOWS).map((w) => <button key={w} className={win === w && !wl ? 'on' : ''} aria-label={`${w} window`} onClick={() => { setWl(null); setWin(w); }}>{w}</button>)}</div>
                 <Tip down title="Display window" keys="W" text="Lung shows the airways and nodules; Soft shows the chest wall and mediastinum." />
               </div>
+              <div className="toolwrap"><button className={`vb wlbtn ${wl || wlOpen ? 'on' : ''}`} aria-label="Adjust level and width" onClick={() => setWlOpen((o) => !o)}><Icon name="sliders" size={18} /></button><Tip down title="Level and width" text="Fine-tune the brightness window by hand." /></div>
             </div>
+
+            {wlOpen && (
+              <div className="floating wlpanel" role="dialog" aria-label="Level and width">
+                <div className="optlabel">Level <b>{Math.round(winVal.level)} HU</b></div>
+                <input type="range" min="-1000" max="500" step="10" value={winVal.level} onChange={(e) => setWl({ ...winVal, level: +e.target.value })} />
+                <div className="optlabel">Width <b>{Math.round(winVal.width)} HU</b></div>
+                <input type="range" min="100" max="2500" step="50" value={winVal.width} onChange={(e) => setWl({ ...winVal, width: +e.target.value })} />
+                <button className="btn tight" disabled={!wl} onClick={() => setWl(null)}>Back to {win}</button>
+              </div>
+            )}
 
             <nav className="floating toolbar">
               {TOOLS.map((t) => (
@@ -547,6 +724,15 @@ export default function App() {
                 <div><b>{m ? m.longMm.toFixed(1) : '-'}</b><span><i className="sw long" />long mm</span></div>
                 <div><b>{m ? m.shortMm.toFixed(1) : '-'}</b><span><i className="sw short" />short mm</span></div>
                 <div><b>{m ? m.meanMm.toFixed(1) : '-'}</b><span>mean mm</span></div>
+              </div>
+              <div className="olist">
+                <div className="olhead"><span>Tumours on this scan</span><div className="toolwrap"><button className="iconbtn" aria-label="Start another tumour (N)" onClick={newOutline}><Icon name="plus" size={16} /></button><Tip down title="Another tumour" keys="N" text="Saves this outline and starts an empty one." /></div></div>
+                {olView.map((o) => (
+                  <div key={o.id} className={`olchip ${o.id === activeId ? 'on' : ''}`}>
+                    <button className="olpick" onClick={() => switchTo(o.id)} title="Open this outline"><b>{o.label}</b><span>{(o.id === activeId && m ? m.volumeMl : o.vol) ? `${(o.id === activeId && m ? m.volumeMl : o.vol).toFixed(1)} mL` : 'empty'}</span></button>
+                    {olView.length > 1 && <button className="olx" aria-label={`Delete ${o.label}`} title="Delete this outline" onClick={() => removeOutline(o.id)}>×</button>}
+                  </div>
+                ))}
               </div>
               {m && slice !== m.bestSlice && (
                 <button className="btn tight" onClick={() => setSlice(m.bestSlice)}>Go to slice {m.bestSlice + 1} <kbd>M</kbd></button>
