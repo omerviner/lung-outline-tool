@@ -9,6 +9,9 @@ A browser tool for lung CT: click a tumour to get an editable 3D outline, with v
 - **Outline:** click a tumour. Drag outward or inward to set the radius; the tolerance slider is beside the tool. The numbers (volume, long and short axis) update live, and the axes are drawn on the slice where the outline is largest (`M` jumps there).
 - **Brush and erase:** paint on the current slice, or through several slices with the depth slider. `Shift` erases while brushing; `Ctrl/Cmd+Z` undoes.
 - **View:** wheel for slices, `Ctrl/Cmd+wheel` or pinch to zoom, `Space+drag` to pan, hold `H` to hide the outline. The `?` button lists every shortcut.
+- **Several tumours:** `N` saves the outline and starts another. The panel at the top right lists them with volumes; click one to reopen and edit it. Outlines are saved in the browser per scan (open the same folder again to get them back). The row's nodule ID comes from the outline label.
+- **Window:** `W` switches Lung and Soft; the sliders button sets level and width by hand.
+- **Time:** the header timer counts active minutes on the scan (`P` pauses). Click it for the time log: per scan, finding, outline and rows, total, and the by-hand model, with a CSV download.
 - **Rows:** `Enter` adds a row in the lab's 18-column order; **Copy rows** pastes into Excel, **CSV** downloads. Lobe, type, solid component, match status, nodule ID and notes are editable in the table.
 
 ## Run locally
