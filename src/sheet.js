@@ -38,3 +38,32 @@ export function toCSV(rows) {
   const q = (v) => { const s = clean(v); return /[",]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   return [COLUMNS.map(([, h]) => q(h)).join(','), ...rows.map((r) => COLUMNS.map(([k]) => q(r[k])).join(','))].join('\n');
 }
+
+// UI-only metadata: group, width, alignment and which cells the user fills in.
+export const COLUMN_META = {
+  patientId: { group: 'Scan', w: 156 }, date: { group: 'Scan', w: 102 }, timepoint: { group: 'Scan', w: 94 },
+  seriesNumber: { group: 'Scan', w: 116, num: true }, sliceThickness: { group: 'Scan', w: 130, num: true },
+  noduleId: { group: 'Nodule', w: 92, edit: true }, lobe: { group: 'Nodule', w: 92, edit: true }, sliceNumber: { group: 'Nodule', w: 108, num: true },
+  type: { group: 'Nodule', w: 112, edit: true },
+  longMm: { group: 'Measurements', w: 100, num: true, measured: true }, shortMm: { group: 'Measurements', w: 104, num: true, measured: true },
+  meanMm: { group: 'Measurements', w: 122, num: true, measured: true }, solid: { group: 'Measurements', w: 132, edit: true },
+  volumeMl: { group: 'Measurements', w: 100, num: true, measured: true },
+  matchStatus: { group: 'Review', w: 132, select: true }, minutes: { group: 'Review', w: 130, num: true },
+  initials: { group: 'Review', w: 84 }, notes: { group: 'Review', w: 260, edit: true },
+};
+
+/** Consecutive columns of the same group, for the group header band. */
+export function groupSpans() {
+  const out = [];
+  for (const [k] of COLUMNS) {
+    const g = COLUMN_META[k].group, last = out[out.length - 1];
+    if (last && last.name === g) last.n++; else out.push({ name: g, n: 1 });
+  }
+  return out;
+}
+
+/** 'Long axis (mm)' -> ['Long axis', 'mm'] */
+export function splitLabel(h) {
+  const m = h.match(/^(.*?)\s*\((.*)\)$/);
+  return m ? [m[1], m[2]] : [h, ''];
+}
