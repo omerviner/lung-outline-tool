@@ -1,4 +1,0 @@
-# Cloudflare Pages / Netlify headers: cross-origin isolation for multi-threaded WebAssembly.
-/*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: credentialless

@@ -26,6 +26,8 @@ export function parseSlice(bytes) {
     slope: num(ds, 'x00281053') || 1, intercept: num(ds, 'x00281052') || 0,
     patientId: ds.string('x00100020'), thickness: num(ds, 'x00180050'),
     seriesNumber: num(ds, 'x00200011'), studyDate: ds.string('x00080020'),
+    uid: ds.string('x0020000e'), desc: ds.string('x0008103e') || '',
+    iop: (ds.string('x00200037') || '').split('\\').map(Number).filter((v) => !Number.isNaN(v)),
   };
 }
 
@@ -43,6 +45,9 @@ export function buildVolume(files) {
   return {
     vol, dims: [slices.length, rows, cols], spacing: [dz, slices[0].dy, slices[0].dx],
     origin: [slices[0].x0, slices[0].y0], zs,
-    meta: { patientId: slices[0].patientId, seriesNumber: slices[0].seriesNumber, studyDate: slices[0].studyDate },
+    meta: {
+      patientId: slices[0].patientId, seriesNumber: slices[0].seriesNumber, studyDate: slices[0].studyDate,
+      thickness: slices[0].thickness, iop: slices[0].iop, desc: slices[0].desc,
+    },
   };
 }
