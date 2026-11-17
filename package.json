@@ -1,0 +1,24 @@
+{
+  "name": "lung-outline-tool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser tool: click a tumour on a lung CT, get an editable 3D outline, volume and diameters, and a row to paste into a sheet. Research use only.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "sync-core": "bash scripts/sync-core.sh",
+    "split-model": "node scripts/split-model.mjs"
+  },
+  "dependencies": {
+    "dicom-parser": "^1.8.21",
+    "onnxruntime-web": "1.20.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.vite/
+# never commit scans, masks or working data
+*.dcm
+*.nii
+*.nii.gz
+*.u8
+work/
+data/

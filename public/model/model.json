@@ -1,0 +1,13 @@
+{
+  "name": "LungMask R231 (ONNX)",
+  "bytes": 115902469,
+  "sha256": "43b0fe89f1eac7fa3516103035f8d16003488820589cccc4561aef6e735cc3fc",
+  "parts": [
+    "part-0.bin",
+    "part-1.bin",
+    "part-2.bin",
+    "part-3.bin",
+    "part-4.bin",
+    "part-5.bin"
+  ]
+}
