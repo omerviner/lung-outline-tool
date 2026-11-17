@@ -46,8 +46,8 @@ export default function Viewer({ vol, dims, spacing, gd, mask, version, slice, w
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = pos(e);
     drag.current = p;
-    if (tool === 'outline') onOutline({ z: slice, ...p, distMm: 0 });
-    else onBrush({ z: slice, ...p, erase: tool === 'erase' || e.shiftKey });
+    if (tool === 'outline') onOutline({ z: slice, ...p, distMm: 0, start: true });
+    else onBrush({ z: slice, ...p, erase: tool === 'erase' || e.shiftKey, start: true });
   };
   const move = (e) => {
     if (!drag.current) return;
