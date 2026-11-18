@@ -1,8 +1,10 @@
 # Lung Outline Tool
 
-Research use only. Not for clinical use; no clinical claims.
+**Lung Outline Tool** is a prototype built for a simulated thoracic oncology research lab to cut the manual time spent finding, outlining and measuring lung tumours on CT. You click a tumour, drag to set its size, brush to fix hazy edges, and read volume and long/short axis live. A lung-segmentation model (LungMask R231 via ONNX Runtime Web) keeps outlines inside the lung. Several tumours per scan, a timer and time log, and a one-click row for the lab's sheet are included.
 
-A browser tool for lung CT: click a tumour to get an editable 3D outline, with volume and diameters updating as you edit, and a row to paste into a spreadsheet. Everything runs in the browser, so scans never leave the machine. Built for a (simulated) thoracic oncology research lab as a take-home project.
+Scans are read in the browser and never uploaded. Research use only; not a medical device, and no clinical claims.
+
+Data for testing: TCIA RIDER Lung CT and RIDER-LungCT-Seg (CC BY). Model: LungMask, Apache-2.0. See `NOTICE.md`.
 
 ## Using it
 - **Open scan folder**, or drop a folder on the canvas. If the folder holds several series you pick one; slices thicker than 1.3 mm show a warning.
