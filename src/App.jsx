@@ -717,10 +717,11 @@ export default function App() {
                         <>
                           <div className="optlabel">Brush size <b>{brushMm} mm</b></div>
                           <input type="range" min="1" max="15" value={brushMm} onChange={(e) => setBrushMm(+e.target.value)} />
-                          <div className="optends"><span>small</span><span><kbd>[</kbd> <kbd>]</kbd></span></div>
+                          <div className="optends"><span>1 mm</span><span><kbd>[</kbd> <kbd>]</kbd></span><span>15 mm</span></div>
                           <div className="optlabel">Depth <b>{brushDepth === 1 ? '1 slice' : `${brushDepth} slices`}</b></div>
                           <input type="range" min="1" max="15" step="2" value={brushDepth} onChange={(e) => setBrushDepth(+e.target.value)} />
-                          <div className="optends"><span>this slice</span><span><kbd>{'{'}</kbd> <kbd>{'}'}</kbd></span></div>
+                          <div className="optends"><span>1 slice</span><span><kbd>{'{'}</kbd> <kbd>{'}'}</kbd></span><span>15 slices</span></div>
+                          <p className="hint">Depth: how many slices one stroke paints through at once.</p>
                         </>
                       )}
                     </div>
