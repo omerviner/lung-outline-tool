@@ -4,6 +4,7 @@ import { Icon } from './icons.jsx';
 import OutlineWorker from './outline.worker.js?worker';
 import LungWorker from './lungmask.worker.js?worker';
 import MatchWorker from './match.worker.js?worker';
+import { interpolateSlices } from './core/interp.js';
 import { TrailPanel } from './Trail.jsx';
 import { parseSlice, buildVolume } from './core/dicom.js';
 import { downsample } from './core/blobs.js';
@@ -47,7 +48,7 @@ const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 
 const SHORTCUTS = [ // [group, [[keys, what it does], ...]]; every key is its own chip
   ['Tools', [[['O', 'B', 'E'], 'Outline, brush, erase'], [['[', ']'], 'Brush size'], [['{', '}'], 'Brush depth (slices)'], [[',', '.'], 'Tolerance (changes the selected area)'], [['Shift'], 'Hold to erase with the brush']]],
-  ['Edit', [[['Ctrl/Cmd+Z'], 'Undo'], [['Del'], 'Clear the outline'], [['Enter'], 'Add a row'], [['N'], 'Start another tumour']]],
+  ['Edit', [[['Ctrl/Cmd+Z'], 'Undo'], [['Del'], 'Clear the outline'], [['Enter'], 'Add a row'], [['N'], 'Start another tumour'], [['F'], 'Fill between the slices edited with the brush']]],
   ['View', [[['W'], 'Lung or soft window'], [['P'], 'Pause or resume the timer'], [['H'], 'Hold to hide the outline'], [['M'], 'Go to the measured slice'], [['+', '-', '0'], 'Zoom in, out, fit'], [['Ctrl/Cmd+scroll'], 'Zoom (or pinch)'], [['Space+drag'], 'Pan']]],
   ['Slices', [[['scroll'], 'Change slice'], [['↑', '↓'], 'Change slice']]],
 ];
@@ -207,6 +208,7 @@ export default function App() {
   const lungT0 = useRef(0);
   const dsRef = useRef(null), lungRef = useRef(null); // this scan's downsampled volume and lung mask, kept for matching
   const baseRef = useRef(null), baseLungWorker = useRef(null);
+  const keysRef = useRef(new Set()), [keyN, setKeyN] = useState(0); // slices edited with the brush: the key slices for interpolation
   const [pasteOpen, setPasteOpen] = useState(false), [pasteText, setPasteText] = useState('');
   const [match, setMatch] = useState(null); // follow-up matching dialog: { phase: 'reading'|'lung'|'choose'|'running'|'error', ... }
   const [hidePinned, setHidePinned] = useState(false);
@@ -331,7 +333,7 @@ export default function App() {
     if (!l.base) return;
     pushBaseHistory();
     l.base.fill(0); l.add.fill(0); l.erase.fill(0); l.mask.fill(0); l.zr = l.baseZr = l.addZr = null; l.edited = false; last.current = null;
-    logRef.current('clear', 'outline cleared'); setInfo(''); bump();
+    keysRef.current.clear(); setKeyN(0); logRef.current('clear', 'outline cleared'); setInfo(''); bump();
   };
 
   // ---- several outlines per scan ----
@@ -366,12 +368,12 @@ export default function App() {
   const switchTo = (id) => {
     const o = ol.current, it = o.items.find((x) => x.id === id);
     if (!it || id === o.active) return;
-    stampTrail(); snapshot(); o.active = id; resetPending(); loadEntry(it); olPersist(); olSync(); setInfo(''); bump();
+    keysRef.current.clear(); setKeyN(0); stampTrail(); snapshot(); o.active = id; resetPending(); loadEntry(it); olPersist(); olSync(); setInfo(''); bump();
   };
   const newOutline = () => {
     const o = ol.current;
     if (!seriesRef.current) return;
-    stampTrail(); snapshot();
+    keysRef.current.clear(); setKeyN(0); stampTrail(); snapshot();
     let n = 1; while (o.items.some((x) => x.label === `N${n}`)) n++;
     const it = { id: o.next++, label: `N${n}`, zr: null, rle: null, vol: 0 };
     o.items.push(it); o.active = it.id; resetPending(); loadEntry(it); olPersist(); olSync(); setInfo('New tumour: click it to outline.'); setTool('outline'); bump();
@@ -450,6 +452,7 @@ export default function App() {
   const onOutline = useCallback((p) => {
     if (p.start) { // a new click starts a new outline: keep it undoable, drop brush edits of the previous one
       if (clock.current.first == null) { clock.current.first = elapsedMs(); saveTime(); }
+      keysRef.current.clear(); setKeyN(0);
       if (!p.proposed) logRef.current('click', `slice ${p.z + 1}`);
       pushBaseHistory();
       const l = L.current; l.add.fill(0); l.erase.fill(0); l.edited = false; l.addZr = null; l.zr = l.baseZr;
@@ -466,12 +469,33 @@ export default function App() {
     requestOutline(last.current, t, true); // preview now, exact when the slider rests; brush edits are kept
   };
 
+  const fillBetween = () => { // interpolate the shape between the slices edited with the brush
+    const s = seriesRef.current, l = L.current;
+    const keys = [...keysRef.current].sort((a, b) => a - b);
+    if (!s || !l.mask || keys.length < 2) { setInfo('Edit at least two slices with the brush first, then fill between them.'); return; }
+    const tmp = l.mask.slice(), n = interpolateSlices(tmp, s.gd, s.spDS, keys);
+    if (!n) { setInfo('The edited slices are next to each other: nothing between them to fill.'); return; }
+    const sl = s.gd[1] * s.gd[2], z0 = keys[0] + 1, z1 = keys[keys.length - 1] - 1;
+    const st = { type: 'brush', idx: [], a: [], e: [] };
+    for (let i = z0 * sl; i < (z1 + 1) * sl; i++) {
+      if (tmp[i] === l.mask[i]) continue;
+      st.idx.push(i); st.a.push(l.add[i]); st.e.push(l.erase[i]);
+      if (tmp[i]) { l.add[i] = 1; l.erase[i] = 0; } else { l.add[i] = 0; l.erase[i] = 1; }
+      l.mask[i] = tmp[i];
+    }
+    if (!st.idx.length) { setInfo('Nothing changed: the slices between already follow the edited ones.'); return; }
+    hist.current.push(st); if (hist.current.length > 40) hist.current.shift();
+    l.edited = true; l.addZr = unionZ(l.addZr, z0, z1); l.zr = joinZ(l.baseZr, l.addZr);
+    logRef.current('interpolate', `filled ${n} slice${n > 1 ? 's' : ''} between the edited slices ${keys[0] + 1} to ${keys[keys.length - 1] + 1}`);
+    setInfo(`Filled ${n} slice${n > 1 ? 's' : ''} between the edited slices ${keys[0] + 1} to ${keys[keys.length - 1] + 1}. Undo reverts it.`); bump();
+  };
   const endGesture = () => { // a drag or a brush stroke has finished: put it in the edit trail
     if (dragInfo.current.on) { logRef.current('resize', `radius ${Math.round(dragInfo.current.mm)} mm`); dragInfo.current = { on: false, mm: 0 }; }
     const st = stroke.current, sr = seriesRef.current;
     if (st && sr && st.type === 'brush' && !st.logged && st.idx.length) {
       st.logged = true;
       const sl = sr.gd[1] * sr.gd[2], zs = new Set(st.idx.map((i) => Math.floor(i / sl))), mm3 = Math.round(st.idx.length * sr.spDS[0] * sr.spDS[1] * sr.spDS[2]);
+      zs.forEach((z) => keysRef.current.add(z)); setKeyN(keysRef.current.size);
       logRef.current(st.erase ? 'erase' : 'brush', `${st.erase ? 'erased' : 'added'} about ${mm3} mm³ on ${zs.size} slice${zs.size > 1 ? 's' : ''}`);
     }
   };
@@ -693,7 +717,7 @@ export default function App() {
 
   // ---- keyboard: ignore only real text entry, so sliders and checkboxes keep the shortcuts ----
   const act = useRef({});
-  act.current = { tool, stepTol: (d) => changeTol(Math.min(0.8, Math.max(0.2, Math.round((tolRef.current + d) * 100) / 100))), undo, clearAll, addRow, newOutline, togglePause, setSlice, goMeasured: () => { if (m) setSlice(m.bestSlice); } };
+  act.current = { tool, fillBetween, stepTol: (d) => changeTol(Math.min(0.8, Math.max(0.2, Math.round((tolRef.current + d) * 100) / 100))), undo, clearAll, addRow, newOutline, togglePause, setSlice, goMeasured: () => { if (m) setSlice(m.bestSlice); } };
   useEffect(() => {
     const onKey = (e) => {
       const t = e.target, tag = t.tagName;
@@ -722,6 +746,7 @@ export default function App() {
       else if (k === '}') setBrushDepth((d) => Math.min(15, d + 2));
       else if (k === '[') setBrushMm((b) => Math.max(1, b - 1));
       else if (k === ']') setBrushMm((b) => Math.min(15, b + 1));
+      else if (k === 'f' && !e.ctrlKey && !e.metaKey) act.current.fillBetween();
       else if (k === ',') act.current.stepTol(-0.02);
       else if (k === '.') act.current.stepTol(0.02);
     };
@@ -857,6 +882,7 @@ export default function App() {
                           <input type="range" min="1" max="15" step="2" value={brushDepth} onChange={(e) => setBrushDepth(+e.target.value)} />
                           <div className="optends"><span>1 slice</span><span><kbd>{'{'}</kbd> <kbd>{'}'}</kbd></span><span>15 slices</span></div>
                           <p className="hint">Depth: how many slices one stroke paints through at once.</p>
+                          <button className="btn tight" disabled={keyN < 2} onClick={fillBetween} title="Fix a few slices with the brush, then fill the slices between the first and last edited slice by shape interpolation. It replaces what is there, so edit the slices where the shape changes. Undo reverts it.">Fill between {keyN >= 2 ? `edited slices (${keyN})` : 'edited slices'} <kbd>F</kbd></button>
                         </>
                       )}
                     </div>

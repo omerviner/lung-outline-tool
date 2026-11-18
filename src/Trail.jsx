@@ -2,8 +2,8 @@
 // so the lab can see how much hand work an outline or a proposed match needed. Kept in the browser per scan; exports to CSV.
 import { useState } from 'react';
 
-export const EDIT_KINDS = ['click', 'resize', 'tolerance', 'brush', 'erase', 'undo', 'clear']; // what counts as a correction after a match
-const LABEL = { click: 'Click', resize: 'Drag resize', tolerance: 'Tolerance', brush: 'Brush add', erase: 'Brush erase', undo: 'Undo', clear: 'Clear', match: 'Match proposed', row: 'Row added', note: 'Note', image: 'Image saved' };
+export const EDIT_KINDS = ['click', 'resize', 'tolerance', 'brush', 'erase', 'undo', 'clear', 'interpolate']; // what counts as a correction after a match
+const LABEL = { click: 'Click', resize: 'Drag resize', tolerance: 'Tolerance', brush: 'Brush add', erase: 'Brush erase', undo: 'Undo', clear: 'Clear', interpolate: 'Fill between', match: 'Match proposed', row: 'Row added', note: 'Note', image: 'Image saved' };
 const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
 const num = (v) => (v == null ? '' : Math.round(v).toLocaleString('en-US'));
 
