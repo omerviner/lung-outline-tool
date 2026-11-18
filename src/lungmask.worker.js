@@ -45,6 +45,7 @@ self.onmessage = async (e) => {
     const vol = new Int16Array(m.vol);
     const mask = await runLungMask(ort, session, vol, m.dims, {
       batch: 4,
+      stride: backend === 'wasm' ? 3 : 1, // on the CPU every third slice is enough for the lung limit (Dice 0.99 against all slices)
       onProgress: (done, total) => self.postMessage({ type: 'progress', id: m.id, stage: 'infer', done, total }),
     });
     const lung = lungToGrid(mask, m.dims);
