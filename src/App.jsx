@@ -43,7 +43,7 @@ const store = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d;
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
 const SHORTCUTS = [ // [group, [[keys, what it does], ...]]; every key is its own chip
-  ['Tools', [[['O', 'B', 'E'], 'Outline, brush, erase'], [['[', ']'], 'Brush size, or tolerance with the outline tool'], [['{', '}'], 'Brush depth (slices)'], [['Shift'], 'Hold to erase with the brush']]],
+  ['Tools', [[['O', 'B', 'E'], 'Outline, brush, erase'], [['[', ']'], 'Brush size'], [['{', '}'], 'Brush depth (slices)'], [[',', '.'], 'Tolerance (changes the selected area)'], [['Shift'], 'Hold to erase with the brush']]],
   ['Edit', [[['Ctrl/Cmd+Z'], 'Undo'], [['Del'], 'Clear the outline'], [['Enter'], 'Add a row'], [['N'], 'Start another tumour']]],
   ['View', [[['W'], 'Lung or soft window'], [['P'], 'Pause or resume the timer'], [['H'], 'Hold to hide the outline'], [['M'], 'Go to the measured slice'], [['+', '-', '0'], 'Zoom in, out, fit'], [['Ctrl/Cmd+scroll'], 'Zoom (or pinch)'], [['Space+drag'], 'Pan']]],
   ['Slices', [[['scroll'], 'Change slice'], [['↑', '↓'], 'Change slice']]],
@@ -73,13 +73,14 @@ function FolderPicker({ onFiles, primary = false, label = 'Open scan folder' }) 
 function LungChip({ s }) {
   if (s.phase === 'idle') return null;
   const pct = s.total ? Math.round((100 * s.done) / s.total) : 0;
-  const text = s.phase === 'loading' || s.phase === 'running' ? `Lung model ${pct}%`
+  const eta = s.phase === 'running' && s.eta > 3 ? ` · about ${s.eta >= 90 ? `${Math.round(s.eta / 60)} min` : `${Math.round(s.eta)} s`} left` : '';
+  const text = s.phase === 'loading' || s.phase === 'running' ? `Lung model ${pct}%${eta}`
     : s.phase === 'preparing' ? 'Preparing lung model'
     : s.phase === 'ready' ? 'Lung limit on'
     : 'Lung model failed';
   const title = s.phase === 'error' ? s.message
     : s.phase === 'ready' ? `The lung model keeps outlines inside the lung. Ready in ${Math.round(s.ms / 1000)} s (${s.backend === 'webgpu' ? 'WebGPU' : 'CPU'}).`
-    : 'The lung model keeps outlines inside the lung. Outlines work without it, with lower accuracy.';
+    : `The lung model keeps outlines inside the lung. You can already click and outline: until it finishes, outlines are less accurate near the chest wall and update by themselves when it is ready.${s.ep === 'wasm' ? ' This computer has no WebGPU, so it runs on the CPU and takes a few minutes.' : ''}`;
   return (
     <span className={`lungchip ${s.phase}`} title={title}>
       {(s.phase === 'loading' || s.phase === 'running') && <i className="bar"><i style={{ width: `${pct}%` }} /></i>}
@@ -192,6 +193,7 @@ export default function App() {
   const [timeLog, setTimeLog] = useState(() => store('timelog', {}));
   const [wl, setWl] = useState(null); // manual window {level, width}; null = the Lung or Soft preset
   const [wlOpen, setWlOpen] = useState(false);
+  const [others, setOthers] = useState(null); // faint outlines of the scan's other tumours (union mask, or null)
   const [olView, setOlView] = useState([]); // outlines of this scan: [{ id, label, vol }]
   const [activeId, setActiveId] = useState(null);
   const [flash, setFlash] = useState(-1);
@@ -199,6 +201,7 @@ export default function App() {
   const [gesture, setGesture] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [lungState, setLungState] = useState({ phase: 'idle' });
+  const lungT0 = useRef(0);
   const [hidePinned, setHidePinned] = useState(false);
   const [holdHide, setHoldHide] = useState(false);
   const viewerRef = useRef(null);
@@ -312,7 +315,17 @@ export default function App() {
   // ---- several outlines per scan ----
   const minId = useRef(0);
   const resetPending = () => { clearTimeout(exactTimer.current); pendingExact.current = false; queued.current = null; minId.current = reqId.current + 1; setComputing(false); };
-  const olSync = () => { const o = ol.current; setOlView(o.items.map((it) => ({ id: it.id, label: it.label, vol: it.vol }))); setActiveId(o.active); };
+  const olSync = () => {
+    const o = ol.current, s = seriesRef.current, l = L.current;
+    let u = null;
+    if (s && l.mask) for (const it of o.items) {
+      if (it.id === o.active || !it.rle || !it.zr) continue;
+      u = u || new Uint8Array(l.mask.length);
+      const d = rleDecode(it.rle, it.zr[0], l.mask.length, s.gd[1] * s.gd[2]);
+      for (let i = 0; i < d.length; i++) if (d[i]) u[i] = 1;
+    }
+    setOthers(u);
+    setOlView(o.items.map((it) => ({ id: it.id, label: it.label, vol: it.vol }))); setActiveId(o.active); };
   const olPersist = () => { const o = ol.current; if (o.key) save(`outlines:${o.key}`, { next: o.next, items: o.items.map(({ id, label, zr, rle }) => ({ id, label, zr, rle })) }); };
   const snapshot = () => { // copy the live outline into its saved entry
     const o = ol.current, s = seriesRef.current, l = L.current, it = o.items.find((x) => x.id === o.active);
@@ -470,7 +483,11 @@ export default function App() {
       const r = ev.data;
       if (r.id !== lungId.current) return; // a newer scan replaced this one
       if (r.type === 'log') console.warn('[lung]', r.text);
-      if (r.type === 'progress') setLungState({ phase: r.stage === 'model' ? 'loading' : r.stage === 'infer' ? 'running' : 'preparing', done: r.done, total: r.total, ep: r.ep });
+      if (r.type === 'progress') {
+        if (r.stage === 'infer' && !lungT0.current) lungT0.current = Date.now();
+        const f = r.total ? r.done / r.total : 0, el = lungT0.current ? (Date.now() - lungT0.current) / 1000 : 0;
+        setLungState((o) => ({ phase: r.stage === 'model' ? 'loading' : r.stage === 'infer' ? 'running' : 'preparing', done: r.done, total: r.total, ep: r.ep || o.ep, eta: r.stage === 'infer' && f > 0.08 ? el * (1 - f) / f : 0 }));
+      }
       else if (r.type === 'error') setLungState({ phase: 'error', message: r.message });
       else if (r.type === 'done') {
         if (import.meta.env.DEV) window.__lung = { voxels: new Uint8Array(r.lung).reduce((s, x) => s + x, 0), backend: r.backend, ms: r.ms };
@@ -480,6 +497,7 @@ export default function App() {
         lw.terminate();
       }
     };
+    lungT0.current = 0;
     const copy = new Int16Array(v.vol); // the worker gets its own copy; the viewer keeps the original
     const forced = new URLSearchParams(window.location.search).get('ep'); // ?ep=wasm or ?ep=webgpu forces one backend
     lw.postMessage({ type: 'run', id, vol: copy.buffer, dims: v.dims, eps: forced ? [forced] : undefined }, [copy.buffer]);
@@ -571,8 +589,10 @@ export default function App() {
       else if (k === '0') viewerRef.current && viewerRef.current.fit();
       else if (k === '{') setBrushDepth((d) => Math.max(1, d - 2));
       else if (k === '}') setBrushDepth((d) => Math.min(15, d + 2));
-      else if (k === '[') { if (act.current.tool === 'outline') act.current.stepTol(-0.02); else setBrushMm((b) => Math.max(1, b - 1)); }
-      else if (k === ']') { if (act.current.tool === 'outline') act.current.stepTol(0.02); else setBrushMm((b) => Math.min(15, b + 1)); }
+      else if (k === '[') setBrushMm((b) => Math.max(1, b - 1));
+      else if (k === ']') setBrushMm((b) => Math.min(15, b + 1));
+      else if (k === ',') act.current.stepTol(-0.02);
+      else if (k === '.') act.current.stepTol(0.02);
     };
     const onKeyUp = (e) => { if (e.key.toLowerCase() === 'h') setHoldHide(false); };
     window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKeyUp);
@@ -647,7 +667,7 @@ export default function App() {
       <section className="stage" onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
         {series ? (
           <>
-              <Viewer ref={viewerRef} orient={orientationLabels(series.meta.iop)} onViewChange={setZoom} onGesture={(on) => { setGesture(on); if (!on && pendingExact.current && last.current) { clearTimeout(exactTimer.current); pendingExact.current = false; requestRef.current(last.current, undefined, false); } }} showOutline={!(hidePinned || holdHide)} axes={axesShow} vol={series.vol} dims={series.dims} spacing={series.spacing} gd={series.gd} mask={L.current.mask} version={version}
+              <Viewer ref={viewerRef} orient={orientationLabels(series.meta.iop)} onViewChange={setZoom} onGesture={(on) => { setGesture(on); if (!on && pendingExact.current && last.current) { clearTimeout(exactTimer.current); pendingExact.current = false; requestRef.current(last.current, undefined, false); } }} showOutline={!(hidePinned || holdHide)} axes={axesShow} vol={series.vol} dims={series.dims} spacing={series.spacing} gd={series.gd} mask={L.current.mask} others={others} version={version}
                 slice={slice} win={winVal} tool={tool} onSlice={setSlice} onOutline={onOutline} onBrush={paint} />
             {status && (
               <div className="scaninfo" title={status}>
@@ -692,11 +712,7 @@ export default function App() {
                   {tool === t.id && (
                     <div className="floating toolopts">
                       {t.id === 'outline' ? (
-                        <>
-                          <div className="optlabel">Tolerance <b>{tol.toFixed(2)}</b></div>
-                          <input type="range" min="0.2" max="0.8" step="0.01" value={tol} onChange={(e) => changeTol(+e.target.value)} />
-                          <div className="optends"><span>more tissue</span><span><kbd>[</kbd> <kbd>]</kbd></span><span>less</span></div>
-                        </>
+                        <p className="hint">Click a tumour, then drag out or in to resize. Tolerance is in the right panel.</p>
                       ) : (
                         <>
                           <div className="optlabel">Brush size <b>{brushMm} mm</b></div>
@@ -732,14 +748,21 @@ export default function App() {
                 <div><b>{m ? m.shortMm.toFixed(1) : '-'}</b><span><i className="sw short" />short mm</span></div>
                 <div><b>{m ? m.meanMm.toFixed(1) : '-'}</b><span>mean mm</span></div>
               </div>
+              <div className="tolbox">
+                <div className="optlabel">Tolerance <b>{tol.toFixed(2)}</b></div>
+                <input type="range" min="0.2" max="0.8" step="0.01" value={tol} onChange={(e) => changeTol(+e.target.value)} />
+                <div className="optends"><span>more tissue</span><span><kbd>,</kbd> <kbd>.</kbd></span><span>less</span></div>
+              </div>
               <div className="olist">
                 <div className="olhead"><span>Tumours on this scan</span><div className="toolwrap"><button className="iconbtn" aria-label="Start another tumour (N)" onClick={newOutline}><Icon name="plus" size={16} /></button><Tip down title="Another tumour" keys="N" text="Saves this outline and starts an empty one." /></div></div>
+                <div className="olchips">
                 {olView.map((o) => (
                   <div key={o.id} className={`olchip ${o.id === activeId ? 'on' : ''}`}>
                     <button className="olpick" onClick={() => switchTo(o.id)} title="Open this outline"><b>{o.label}</b><span>{(o.id === activeId && m ? m.volumeMl : o.vol) ? `${(o.id === activeId && m ? m.volumeMl : o.vol).toFixed(1)} mL` : 'empty'}</span></button>
                     {olView.length > 1 && <button className="olx" aria-label={`Delete ${o.label}`} title="Delete this outline" onClick={() => removeOutline(o.id)}>×</button>}
                   </div>
                 ))}
+                </div>
               </div>
               {m && slice !== m.bestSlice && (
                 <button className="btn tight" onClick={() => setSlice(m.bestSlice)}>Go to slice {m.bestSlice + 1} <kbd>M</kbd></button>

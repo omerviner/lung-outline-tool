@@ -11,7 +11,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  * Space+drag, the middle button or Alt+drag pans.
  */
 const Viewer = forwardRef(function Viewer(
-  { vol, dims, spacing, gd, mask, version, slice, win, tool, onSlice, onOutline, onBrush, onGesture, showOutline, axes, orient, onViewChange }, ref,
+  { vol, dims, spacing, gd, mask, others, version, slice, win, tool, onSlice, onOutline, onBrush, onGesture, showOutline, axes, orient, onViewChange }, ref,
 ) {
   const base = useRef(null), over = useRef(null), wrap = useRef(null), drag = useRef(null);
   const wheelAcc = useRef(0), space = useRef(false), zoomAtRef = useRef(null), viewRef = useRef(null), fitRef = useRef(null), boxRef = useRef(null);
@@ -74,6 +74,13 @@ const Viewer = forwardRef(function Viewer(
   useEffect(() => {
     const [, ny, nx] = gd, ctx = over.current.getContext('2d');
     const img = ctx.createImageData(nx, ny), k = slice * ny * nx;
+    if (others) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) { // the scan's other tumours: a faint outline only
+      const i = k + y * nx + x;
+      if (!others[i]) continue;
+      if (!(x === 0 || y === 0 || x === nx - 1 || y === ny - 1 || !others[i - 1] || !others[i + 1] || !others[i - nx] || !others[i + nx])) continue;
+      const j = (y * nx + x) * 4;
+      img.data[j] = 253; img.data[j + 1] = 253; img.data[j + 2] = 249; img.data[j + 3] = 120;
+    }
     for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
       const i = k + y * nx + x;
       if (!mask[i]) continue;
@@ -83,7 +90,7 @@ const Viewer = forwardRef(function Viewer(
       img.data[j] = edge ? 255 : 236; img.data[j + 1] = edge ? 104 : 88; img.data[j + 2] = edge ? 72 : 66; img.data[j + 3] = edge ? 255 : 70;
     }
     ctx.putImageData(img, 0, 0);
-  }, [mask, version, slice, gd]);
+  }, [mask, others, version, slice, gd]);
 
   // wheel: slices (accumulated) or zoom
   useEffect(() => {
