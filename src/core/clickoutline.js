@@ -220,12 +220,12 @@ export function outlineFromClick(v, dims, sp, lung, seed, opts = {}) {
 
   const keyA = `${seed[0]},${seed[1]},${seed[2]}|${R0}|${P.seedRadiusMm}|${P.seedPct}`;
   if (!cacheA || cacheA.v !== v || cacheA.lung !== lung || cacheA.region !== region || cacheA.key !== keyA) {
-    cacheA = { v, lung, region, key: keyA, A: buildA(v, dims, sp, lung, region, seed, R0, P), B: null, keyB: '' };
+    cacheA = { v, lung, region, key: keyA, A: buildA(v, dims, sp, lung, region, seed, R0, P), Bs: new Map() };
   }
   const A = cacheA.A, { lo, rd, sl, rs, sm, lungIn, rl, seedHU, lungHU } = A;
   const keyB = `${t}|${P.coreT}`;
-  if (cacheA.keyB !== keyB) { cacheA.B = buildB(A, sp, t, P); cacheA.keyB = keyB; }
-  const B = cacheA.B;
+  let B = cacheA.Bs.get(keyB); // the last few tolerances are kept, so sliding back and forth is instant
+  if (!B) { B = buildB(A, sp, t, P); cacheA.Bs.set(keyB, B); if (cacheA.Bs.size > 16) cacheA.Bs.delete(cacheA.Bs.keys().next().value); }
   const result = { ...mk(), seedHU, lungHU, threshold: B.threshold, radiusMm: R0, openMm: 0, thickMm: 0 };
   if (B.fail) return result;
   const { cand, core, thick, cz, cy, cx } = B;
