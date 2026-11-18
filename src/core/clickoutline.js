@@ -106,41 +106,25 @@ function dilateMm(mask, dims, sp, rMm) {
   return out;
 }
 
-/**
- * @param v       Float32Array HU volume on the grid
- * @param dims    [nz, ny, nx]
- * @param sp      voxel spacing in mm [dz, dy, dx]
- * @param lung    Uint8Array lung mask on the grid (learned; may miss attached tumours)
- * @param seed    [z, y, x] clicked voxel
- * @param opts    t (tolerance 0..1, lower = more inclusive), radiusMm (search ball around the tumour centre;
- *                default automatic), openR (opening radius in voxels; default automatic), useLung (limit
- *                growth to the lung hull; default true), limit ('hull' | 'mask'; 'mask' is the v1 limit),
- *                stats (also return unsupervised outline descriptors), plus any key of DEFAULTS
- * @returns {mask: Uint8Array(grid), voxels, seedHU, lungHU, threshold, radiusMm (search ball used),
- *           openMm, thickMm (core inscribed radius), stats?}
- */
-export function outlineFromClick(v, dims, sp, lung, seed, opts = {}) {
-  const P = { ...DEFAULTS, ...opts };
-  const { t, useLung = true, limit = 'hull' } = P;
-  const [nz, ny, nx] = dims;
-  const userRadius = typeof opts.radiusMm === 'number';
-  const R0 = Math.max(P.maxRadiusMm, userRadius ? opts.radiusMm + 20 : 0); // region read around the click
-  const region = useLung ? (limit === 'mask' ? lung : lungHull(lung, dims)) : null;
+// ---- caches, so that dragging does not redo the work that only depends on the click ----
+// A: the smoothed region around the click and the lung/tumour intensities (depends on the click only).
+// B: the dense core, its thickness and centre (depends on the click and the tolerance).
+// A drag changes only the radius, and a tolerance slide only B, so most requests start from a cache.
+let cacheA = null, cacheB = null;
 
+function buildA(v, dims, sp, lung, region, seed, R0, P) {
+  const [nz, ny, nx] = dims;
   const lo = [0, 1, 2].map((a) => Math.max(0, seed[a] - Math.ceil(R0 / sp[a])));
   const hi = [nz, ny, nx].map((n, a) => Math.min(n, seed[a] + Math.ceil(R0 / sp[a]) + 1));
   const rd = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]], rn = rd[0] * rd[1] * rd[2], sl = rd[1] * rd[2];
-  const crop = new Float32Array(rn), rl = new Uint8Array(rn), inBall = new Uint8Array(rn), lungIn = new Uint8Array(rn);
+  const crop = new Float32Array(rn), rl = new Uint8Array(rn), lungIn = new Uint8Array(rn);
   const rs = [seed[0] - lo[0], seed[1] - lo[1], seed[2] - lo[2]];
-  for (let z = 0; z < rd[0]; z++) for (let y = 0; y < rd[1]; y++) for (let x = 0; x < rd[2]; x++) {
-    const i = z * sl + y * rd[2] + x, g = ((z + lo[0]) * ny + y + lo[1]) * nx + x + lo[2];
-    crop[i] = v[g]; rl[i] = region ? region[g] : 1; lungIn[i] = lung[g];
-    const dzm = (z - rs[0]) * sp[0], dym = (y - rs[1]) * sp[1], dxm = (x - rs[2]) * sp[2];
-    inBall[i] = dzm * dzm + dym * dym + dxm * dxm <= R0 * R0 ? 1 : 0;
+  for (let z = 0; z < rd[0]; z++) for (let y = 0; y < rd[1]; y++) {
+    const i0 = z * sl + y * rd[2], g0 = ((z + lo[0]) * ny + y + lo[1]) * nx + lo[2];
+    for (let x = 0; x < rd[2]; x++) { crop[i0 + x] = v[g0 + x]; rl[i0 + x] = region ? region[g0 + x] : 1; lungIn[i0 + x] = lung[g0 + x]; }
   }
   const sm = gauss3(crop, rd, 1.0);
   const sIdx = rs[0] * sl + rs[1] * rd[2] + rs[2];
-
   // tumour intensity under the click, and the surrounding lung
   const near = [], rS2 = P.seedRadiusMm * P.seedRadiusMm;
   const w = [0, 1, 2].map((a) => Math.ceil(P.seedRadiusMm / sp[a]));
@@ -154,17 +138,25 @@ export function outlineFromClick(v, dims, sp, lung, seed, opts = {}) {
   const air = [];
   for (let i = 0; i < rn; i++) if (lungIn[i] && sm[i] < -500) air.push(sm[i]);
   const lungHU = air.length > 200 ? quantile(air, 0.5) : -850;
-  const threshold = lungHU + t * (seedHU - lungHU);
-  const result = { mask: new Uint8Array(v.length), voxels: 0, seedHU, lungHU, threshold, radiusMm: R0, openMm: 0, thickMm: 0 };
-  if (!(seedHU > lungHU + 100)) return result; // clicked on air or very faint tissue
+  return { lo, rd, rn, sl, rs, sIdx, sm, rl, lungIn, seedHU, lungHU, R0 };
+}
 
+function buildB(A, sp, t, P) {
+  const { rd, rn, sl, rs, sIdx, sm, rl, seedHU, lungHU, R0 } = A;
+  const threshold = lungHU + t * (seedHU - lungHU);
+  const B = { threshold, fail: false };
+  if (!(seedHU > lungHU + 100)) { B.fail = true; return B; } // clicked on air or very faint tissue
   const cand = new Uint8Array(rn), core = new Uint8Array(rn);
   const coreThr = P.coreT == null ? threshold : lungHU + Math.max(t, P.coreT) * (seedHU - lungHU);
-  for (let i = 0; i < rn; i++) {
-    cand[i] = inBall[i] && rl[i] && sm[i] > threshold ? 1 : 0;
-    core[i] = cand[i] && sm[i] > coreThr ? 1 : 0;
+  const R2 = R0 * R0;
+  for (let z = 0; z < rd[0]; z++) for (let y = 0; y < rd[1]; y++) {
+    const dzm = (z - rs[0]) * sp[0], dym = (y - rs[1]) * sp[1], dzy = dzm * dzm + dym * dym;
+    for (let x = 0; x < rd[2]; x++) {
+      const i = z * sl + y * rd[2] + x, dxm = (x - rs[2]) * sp[2];
+      const k = dzy + dxm * dxm <= R2 && rl[i] && sm[i] > threshold ? 1 : 0;
+      cand[i] = k; core[i] = k && sm[i] > coreThr ? 1 : 0;
+    }
   }
-
   // click just outside the core: nearest core voxel within 5 mm; if none, fall back to a single level
   const nearestCore = () => {
     if (core[sIdx]) return sIdx;
@@ -181,7 +173,7 @@ export function outlineFromClick(v, dims, sp, lung, seed, opts = {}) {
   };
   let c = nearestCore();
   if (c < 0 && coreThr > threshold) { core.set(cand); c = nearestCore(); }
-  if (c < 0) return result;
+  if (c < 0) { B.fail = true; return B; }
   // tumour thickness: climb the distance map from the click to its local peak
   const dist = edtSq(core, rd, sp);
   for (;;) { // steepest ascent on the 26-neighbourhood
@@ -196,29 +188,64 @@ export function outlineFromClick(v, dims, sp, lung, seed, opts = {}) {
     if (bi === c) break;
     c = bi;
   }
-  const thick = Math.sqrt(dist[c]);
   const cz = (c / sl) | 0, cy = ((c - cz * sl) / rd[2]) | 0, cx = c - cz * sl - cy * rd[2];
+  Object.assign(B, { cand, core, thick: Math.sqrt(dist[c]), cz, cy, cx });
+  return B;
+}
+
+/**
+ * @param v       Float32Array HU volume on the grid
+ * @param dims    [nz, ny, nx]
+ * @param sp      voxel spacing in mm [dz, dy, dx]
+ * @param lung    Uint8Array lung mask on the grid (learned; may miss attached tumours)
+ * @param seed    [z, y, x] clicked voxel
+ * @param opts    t (tolerance 0..1, lower = more inclusive), radiusMm (search ball around the tumour centre;
+ *                default automatic), openR (opening radius in voxels; default automatic), useLung (limit
+ *                growth to the lung hull; default true), limit ('hull' | 'mask'; 'mask' is the v1 limit),
+ *                stats (also return unsupervised outline descriptors), boxOnly (return the outline as a small
+ *                box, `box`, instead of a full-volume `mask`), plus any key of DEFAULTS
+ * @returns {mask: Uint8Array(grid) (null with boxOnly), box: {origin [z,y,x], dims [nz,ny,nx], data}, zr [z0, z1] | null,
+ *           voxels, seedHU, lungHU, threshold, radiusMm (search ball used), openMm, thickMm (core inscribed
+ *           radius), stats?}
+ */
+export function outlineFromClick(v, dims, sp, lung, seed, opts = {}) {
+  const P = { ...DEFAULTS, ...opts };
+  const { t, useLung = true, limit = 'hull', boxOnly = false } = P;
+  const [nz, ny, nx] = dims;
+  const userRadius = typeof opts.radiusMm === 'number';
+  // region read around the click; a dragged radius rounds it up to a multiple of 20 mm so the cached region survives a drag
+  const R0 = Math.max(P.maxRadiusMm, userRadius ? Math.ceil((opts.radiusMm + 20) / 20) * 20 : 0);
+  const region = useLung ? (limit === 'mask' ? lung : lungHull(lung, dims)) : null;
+  const mk = () => ({ mask: boxOnly ? null : new Uint8Array(v.length), box: null, zr: null, voxels: 0 });
+
+  const keyA = `${seed[0]},${seed[1]},${seed[2]}|${R0}|${P.seedRadiusMm}|${P.seedPct}`;
+  if (!cacheA || cacheA.v !== v || cacheA.lung !== lung || cacheA.region !== region || cacheA.key !== keyA) {
+    cacheA = { v, lung, region, key: keyA, A: buildA(v, dims, sp, lung, region, seed, R0, P), B: null, keyB: '' };
+  }
+  const A = cacheA.A, { lo, rd, sl, rs, sm, lungIn, rl, seedHU, lungHU } = A;
+  const keyB = `${t}|${P.coreT}`;
+  if (cacheA.keyB !== keyB) { cacheA.B = buildB(A, sp, t, P); cacheA.keyB = keyB; }
+  const B = cacheA.B;
+  const result = { ...mk(), seedHU, lungHU, threshold: B.threshold, radiusMm: R0, openMm: 0, thickMm: 0 };
+  if (B.fail) return result;
+  const { cand, core, thick, cz, cy, cx } = B;
 
   // search ball around the tumour centre, sized by its thickness (or the user's radius when dragging)
   const Rb = userRadius ? opts.radiusMm : Math.min(R0, P.ballFrac * thick + P.ballAddMm);
-  {
-    for (let z = 0; z < rd[0]; z++) for (let y = 0; y < rd[1]; y++) for (let x = 0; x < rd[2]; x++) {
-      const i = z * sl + y * rd[2] + x;
-      if (!cand[i]) continue;
-      const d = ((z - cz) * sp[0]) ** 2 + ((y - cy) * sp[1]) ** 2 + ((x - cx) * sp[2]) ** 2;
-      if (d > Rb * Rb) { cand[i] = 0; core[i] = 0; }
-    }
-  }
-
-  // work in the box around the search ball only (faster)
   const cc = [cz, cy, cx];
+  // work in the box around the search ball only (faster)
   const b0 = [0, 1, 2].map((a) => Math.max(0, cc[a] - Math.ceil((Rb + 1) / sp[a])));
   const b1 = [0, 1, 2].map((a) => Math.min(rd[a], cc[a] + Math.ceil((Rb + 1) / sp[a]) + 1));
   const bd = [b1[0] - b0[0], b1[1] - b0[1], b1[2] - b0[2]], bn = bd[0] * bd[1] * bd[2], bsl = bd[1] * bd[2];
-  const bc = new Uint8Array(bn), bk = new Uint8Array(bn);
-  for (let z = 0; z < bd[0]; z++) for (let y = 0; y < bd[1]; y++) for (let x = 0; x < bd[2]; x++) {
-    const i = z * bsl + y * bd[2] + x, j = (z + b0[0]) * sl + (y + b0[1]) * rd[2] + x + b0[2];
-    bc[i] = cand[j]; bk[i] = core[j];
+  const bc = new Uint8Array(bn), bk = new Uint8Array(bn), Rb2 = Rb * Rb;
+  for (let z = 0; z < bd[0]; z++) for (let y = 0; y < bd[1]; y++) {
+    const dzm = (z + b0[0] - cz) * sp[0], dym = (y + b0[1] - cy) * sp[1], dzy = dzm * dzm + dym * dym;
+    for (let x = 0; x < bd[2]; x++) {
+      const j = (z + b0[0]) * sl + (y + b0[1]) * rd[2] + x + b0[2], dxm = (x + b0[2] - cx) * sp[2];
+      if (dzy + dxm * dxm > Rb2) continue;
+      const i = z * bsl + y * bd[2] + x;
+      bc[i] = cand[j]; bk[i] = core[j];
+    }
   }
   const bIdx = (zz, yy, xx) => (zz - b0[0]) * bsl + (yy - b0[1]) * bd[2] + xx - b0[2];
   const ci = bIdx(cz, cy, cx);
@@ -260,14 +287,25 @@ export function outlineFromClick(v, dims, sp, lung, seed, opts = {}) {
   const k2 = lab2[ci] || (si >= 0 ? lab2[si] : 0);
   if (k2) for (let i = 0; i < bn; i++) grown[i] = lab2[i] === k2 ? 1 : 0;
   const filled = fillHoles2D(grown, bd);
-  let count = 0;
-  for (let z = 0; z < bd[0]; z++) for (let y = 0; y < bd[1]; y++) for (let x = 0; x < bd[2]; x++) {
-    if (filled[z * bsl + y * bd[2] + x]) {
-      result.mask[((z + b0[0] + lo[0]) * ny + y + b0[1] + lo[1]) * nx + x + b0[2] + lo[2]] = 1; count++;
+  let count = 0, zA = -1, zB = -1;
+  for (let z = 0; z < bd[0]; z++) {
+    let any = false;
+    for (let i = z * bsl, e = i + bsl; i < e; i++) if (filled[i]) { any = true; count++; }
+    if (any) { if (zA < 0) zA = z; zB = z; }
+  }
+  const origin = [b0[0] + lo[0], b0[1] + lo[1], b0[2] + lo[2]];
+  if (count) {
+    result.box = { origin, dims: bd, data: filled };
+    result.zr = [zA + origin[0], zB + origin[0]];
+    if (result.mask) {
+      for (let z = 0; z < bd[0]; z++) for (let y = 0; y < bd[1]; y++) {
+        const i0 = z * bsl + y * bd[2], g0 = ((z + origin[0]) * ny + y + origin[1]) * nx + origin[2];
+        for (let x = 0; x < bd[2]; x++) if (filled[i0 + x]) result.mask[g0 + x] = 1;
+      }
     }
   }
   Object.assign(result, { voxels: count, radiusMm: Rb, openMm, thickMm: thick });
-  if (opts.stats && count) result.stats = outlineStats(filled, bd, b0, rd, sm, cand, lungIn, rl, sp, threshold, seedHU, lungHU, cc, Rb, thick);
+  if (opts.stats && count) result.stats = outlineStats(filled, bd, b0, rd, sm, cand, lungIn, rl, sp, B.threshold, seedHU, lungHU, cc, Rb, thick);
   return result;
 }
 

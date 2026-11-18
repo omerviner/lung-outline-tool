@@ -14,16 +14,9 @@ self.onmessage = (e) => {
     lung = new Uint8Array(m.lung);
   } else if (m.type === 'outline') {
     const t0 = performance.now(), haveLung = !!lung;
-    const r = outlineFromClick(v, gd, sp, haveLung ? lung : ones, m.seed, { ...m.opts, useLung: haveLung });
-    const sl = gd[1] * gd[2];
-    let z0 = -1, z1 = -1;
-    if (r.voxels) {
-      for (let z = 0; z < gd[0]; z++) {
-        let any = false;
-        for (let i = z * sl, e2 = i + sl; i < e2; i++) if (r.mask[i]) { any = true; break; }
-        if (any) { if (z0 < 0) z0 = z; z1 = z; }
-      }
-    }
-    self.postMessage({ type: 'result', id: m.id, mask: r.mask, voxels: r.voxels, zr: z0 < 0 ? null : [z0, z1], ms: Math.round(performance.now() - t0), radiusMm: r.radiusMm, usedLung: haveLung }, [r.mask.buffer]);
+    // boxOnly: the result is a small box around the outline, not a copy of the whole volume
+    const r = outlineFromClick(v, gd, sp, haveLung ? lung : ones, m.seed, { ...m.opts, useLung: haveLung, boxOnly: true });
+    const box = r.box ? { origin: r.box.origin, dims: r.box.dims, data: r.box.data } : null;
+    self.postMessage({ type: 'result', id: m.id, box, voxels: r.voxels, zr: r.zr, ms: Math.round(performance.now() - t0), radiusMm: r.radiusMm, usedLung: haveLung }, box ? [box.data.buffer] : []);
   }
 };

@@ -372,8 +372,15 @@ export default function App() {
       if (m.id < minId.current) { if (!queued.current) setComputing(false); return; } // result for an outline that was closed
       const l = L.current;
       if (l.mask) {
-        const prevZr = l.baseZr; // slices that held the previous outline must be cleared too
-        l.base = new Uint8Array(m.mask.buffer ? m.mask.buffer : m.mask);
+        const prevZr = l.baseZr, [, ny, nx] = seriesRef.current.gd, sl = ny * nx; // slices that held the previous outline must be cleared too
+        if (prevZr) l.base.fill(0, prevZr[0] * sl, (prevZr[1] + 1) * sl);
+        if (m.box) { // the worker sends only a box around the outline: write it into the base layer
+          const { origin: o, dims: d, data } = m.box;
+          for (let z = 0; z < d[0]; z++) for (let y = 0; y < d[1]; y++) {
+            const i0 = (z * d[1] + y) * d[2], g0 = ((z + o[0]) * ny + y + o[1]) * nx + o[2];
+            for (let x = 0; x < d[2]; x++) if (data[i0 + x]) l.base[g0 + x] = 1;
+          }
+        }
         l.baseZr = m.voxels ? m.zr : null;
         l.zr = joinZ(l.baseZr, l.addZr);
         autoR.current = m.radiusMm;
@@ -395,7 +402,7 @@ export default function App() {
     const seed = [p.z, Math.min(s.gd[1] - 1, Math.floor(p.y / 2)), Math.min(s.gd[2] - 1, Math.floor(p.x / 2))];
     const dragged = p.distMm >= 3 ? Math.min(100, Math.max(6, p.distMm)) : undefined; // a plain click uses the automatic radius
     const opts = { t: tolOverride ?? tolRef.current };
-    if (preview && (dragged || autoR.current)) { opts.radiusMm = dragged || autoR.current; opts.maxRadiusMm = 0; } // region = radius + 20 mm
+    if (preview && (dragged || autoR.current)) { opts.radiusMm = dragged || autoR.current; } // the click's cached region is reused, so a preview only redoes the part inside the radius
     else if (dragged) opts.radiusMm = dragged;
     const q = { seed, opts };
     if (inflight.current) queued.current = q; else post(q); // latest request wins
