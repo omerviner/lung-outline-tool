@@ -45,6 +45,15 @@ const Viewer = forwardRef(function Viewer(
   useImperativeHandle(ref, () => ({
     zoomBy: (f) => zoomAt(f, boxRef.current.cw / 2, boxRef.current.ch / 2),
     fit: () => place(1, 0, 0),
+    png: () => { // the slice as displayed, with the outline on it, as a PNG data URL
+      const b = base.current, c = document.createElement('canvas');
+      c.width = b.width; c.height = b.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(b, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      if (showOutline) ctx.drawImage(over.current, 0, 0, b.width, b.height);
+      return c.toDataURL('image/png');
+    },
   }));
 
   // follow the stage size

@@ -302,3 +302,8 @@ tbody tr { scroll-snap-align: start; }
 
 tr.imported td { color: var(--muted); background: #f4efe6; }
 .pastebox { width: 100%; box-sizing: border-box; font: inherit; font-size: .8rem; border: 1px solid var(--sand); border-radius: 8px; padding: 8px; background: var(--ivory); color: var(--ink); resize: vertical; }
+
+.trailpanel { max-height: min(70vh, 640px); overflow: auto; }
+.trailscroll { max-height: 220px; overflow: auto; border: 1px solid var(--sand); border-radius: 8px; }
+.trailnote { display: flex; gap: 6px; }
+.trailnote input { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--sand); border-radius: 8px; background: var(--ivory); padding: 0 8px; color: var(--ink); font: inherit; font-size: .8rem; }

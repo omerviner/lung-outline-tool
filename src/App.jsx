@@ -4,6 +4,7 @@ import { Icon } from './icons.jsx';
 import OutlineWorker from './outline.worker.js?worker';
 import LungWorker from './lungmask.worker.js?worker';
 import MatchWorker from './match.worker.js?worker';
+import { TrailPanel } from './Trail.jsx';
 import { parseSlice, buildVolume } from './core/dicom.js';
 import { downsample } from './core/blobs.js';
 import { measure, axesOnSlice } from './measure.js';
@@ -226,6 +227,9 @@ export default function App() {
   const ol = useRef({ items: [], active: null, next: 1, key: '' });
   // active time on the scan: runs only while not paused; saved so a reload does not lose it
   const clock = useRef({ ms: 0, since: 0, first: null, rows: [] });
+  // edit trail: every correction with the volume after it (see Trail.jsx)
+  const trailRef = useRef([]), logRef = useRef(null), mRef = useRef(null), dragInfo = useRef({ on: false, mm: 0 });
+  const [trailN, setTrailN] = useState(0), [trailOpen, setTrailOpen] = useState(false);
   const tolRef = useRef(tol), tolSession = useRef(false), tolTimer = useRef(0);
   tolRef.current = tol;
   depthRef.current = brushDepth;
@@ -234,6 +238,18 @@ export default function App() {
   useEffect(() => { save('initials', initials); save('timepoint', timepoint); }, [initials, timepoint]);
   // ---- active time (pausable) ----
   const elapsedMs = () => clock.current.ms + (clock.current.since ? Date.now() - clock.current.since : 0);
+  const trailSave = () => { const k = ol.current.key; if (k) save(`trail:${k}`, trailRef.current.slice(-1500)); };
+  const stampTrail = () => { // give new events the volume and axes of the outline as they stand now
+    const mm = mRef.current; let ch = false;
+    for (const e of trailRef.current) if (e.vol == null) { e.vol = mm ? mm.volumeMl * 1000 : 0; e.long = mm ? mm.longMm : null; e.short = mm ? mm.shortMm : null; ch = true; }
+    if (ch) { trailSave(); setTrailN((n) => n + 1); }
+  };
+  const logEdit = (kind, detail = '') => {
+    const o = ol.current, it = o.items.find((x) => x.id === o.active);
+    trailRef.current.push({ id: `${Date.now()}-${trailRef.current.length}`, ms: elapsedMs(), tumour: it ? it.label : 'N1', kind, detail, vol: null });
+    setTrailN((n) => n + 1);
+  };
+  logRef.current = logEdit;
   const saveTime = useCallback(() => {
     const k = ol.current.key;
     if (!k) return;
@@ -307,7 +323,7 @@ export default function App() {
       l.base = e.base; l.add = e.add || new Uint8Array(e.base.length); l.erase = e.erase || new Uint8Array(e.base.length);
       l.edited = !!e.add; l.baseZr = e.baseZr; l.addZr = e.addZr; l.zr = joinZ(l.baseZr, l.addZr); last.current = e.last; recomposite();
     }
-    setInfo('Undid the last change.'); bump();
+    logRef.current('undo', e.type === 'brush' ? 'undid a brush stroke' : 'undid the last outline change'); setInfo('Undid the last change.'); bump();
   }, [bump]);
 
   const clearAll = () => {
@@ -315,7 +331,7 @@ export default function App() {
     if (!l.base) return;
     pushBaseHistory();
     l.base.fill(0); l.add.fill(0); l.erase.fill(0); l.mask.fill(0); l.zr = l.baseZr = l.addZr = null; l.edited = false; last.current = null;
-    setInfo(''); bump();
+    logRef.current('clear', 'outline cleared'); setInfo(''); bump();
   };
 
   // ---- several outlines per scan ----
@@ -350,12 +366,12 @@ export default function App() {
   const switchTo = (id) => {
     const o = ol.current, it = o.items.find((x) => x.id === id);
     if (!it || id === o.active) return;
-    snapshot(); o.active = id; resetPending(); loadEntry(it); olPersist(); olSync(); setInfo(''); bump();
+    stampTrail(); snapshot(); o.active = id; resetPending(); loadEntry(it); olPersist(); olSync(); setInfo(''); bump();
   };
   const newOutline = () => {
     const o = ol.current;
     if (!seriesRef.current) return;
-    snapshot();
+    stampTrail(); snapshot();
     let n = 1; while (o.items.some((x) => x.label === `N${n}`)) n++;
     const it = { id: o.next++, label: `N${n}`, zr: null, rle: null, vol: 0 };
     o.items.push(it); o.active = it.id; resetPending(); loadEntry(it); olPersist(); olSync(); setInfo('New tumour: click it to outline.'); setTool('outline'); bump();
@@ -434,9 +450,11 @@ export default function App() {
   const onOutline = useCallback((p) => {
     if (p.start) { // a new click starts a new outline: keep it undoable, drop brush edits of the previous one
       if (clock.current.first == null) { clock.current.first = elapsedMs(); saveTime(); }
+      if (!p.proposed) logRef.current('click', `slice ${p.z + 1}`);
       pushBaseHistory();
       const l = L.current; l.add.fill(0); l.erase.fill(0); l.edited = false; l.addZr = null; l.zr = l.baseZr;
     }
+    if (!p.start && p.distMm >= 3) dragInfo.current = { on: true, mm: p.distMm };
     requestOutline(p, undefined, !p.start && p.distMm >= 3);
   }, [requestOutline]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -444,14 +462,24 @@ export default function App() {
     setTol(t);
     if (!last.current) return;
     if (!tolSession.current) { pushBaseHistory(); tolSession.current = true; }
-    clearTimeout(tolTimer.current); tolTimer.current = setTimeout(() => { tolSession.current = false; }, 800);
+    clearTimeout(tolTimer.current); tolTimer.current = setTimeout(() => { tolSession.current = false; logRef.current('tolerance', `tolerance ${tolRef.current.toFixed(2)}`); }, 800);
     requestOutline(last.current, t, true); // preview now, exact when the slider rests; brush edits are kept
+  };
+
+  const endGesture = () => { // a drag or a brush stroke has finished: put it in the edit trail
+    if (dragInfo.current.on) { logRef.current('resize', `radius ${Math.round(dragInfo.current.mm)} mm`); dragInfo.current = { on: false, mm: 0 }; }
+    const st = stroke.current, sr = seriesRef.current;
+    if (st && sr && st.type === 'brush' && !st.logged && st.idx.length) {
+      st.logged = true;
+      const sl = sr.gd[1] * sr.gd[2], zs = new Set(st.idx.map((i) => Math.floor(i / sl))), mm3 = Math.round(st.idx.length * sr.spDS[0] * sr.spDS[1] * sr.spDS[2]);
+      logRef.current(st.erase ? 'erase' : 'brush', `${st.erase ? 'erased' : 'added'} about ${mm3} mm³ on ${zs.size} slice${zs.size > 1 ? 's' : ''}`);
+    }
   };
 
   const paint = useCallback(({ z, x, y, erase, start }) => {
     const s = seriesRef.current, l = L.current;
     if (!s || !l.mask) return;
-    if (start) { stroke.current = { type: 'brush', idx: [], a: [], e: [] }; hist.current.push(stroke.current); if (hist.current.length > 40) hist.current.shift(); }
+    if (start) { stroke.current = { type: 'brush', idx: [], a: [], e: [], erase }; hist.current.push(stroke.current); if (hist.current.length > 40) hist.current.shift(); }
     const [nzs, ny, nx] = s.gd, cy = y / 2, cx = x / 2, r = brushMm / s.spDS[1], st = stroke.current;
     const depth = depthRef.current, half = Math.floor((depth - 1) / 2), z0 = Math.max(0, z - half), z1 = Math.min(nzs - 1, z + (depth - 1 - half));
     const a1 = erase ? 0 : 1, e1 = erase ? 1 : 0;
@@ -516,6 +544,7 @@ export default function App() {
     // outlines and time of this scan are remembered between sessions (matched by patient, series and size)
     const key = `${v.meta.patientId}|${v.meta.seriesNumber}|${v.dims.join('x')}|${v.meta.studyDate}`;
     const o = ol.current, saved = store(`outlines:${key}`, null);
+    trailRef.current = store(`trail:${key}`, []); setTrailN((n) => n + 1);
     o.key = key; o.label = `${v.meta.patientId || 'Scan'} · series ${v.meta.seriesNumber}`;
     o.items = saved && saved.items.length ? saved.items.map((it) => ({ ...it, vol: it.rle ? (rleVoxels(it.rle) * spDS[0] * spDS[1] * spDS[2]) / 1000 : 0 })) : [{ id: 1, label: 'N1', zr: null, rle: null, vol: 0 }];
     o.next = Math.max(saved ? saved.next : 1, ...o.items.map((x) => x.id + 1)); o.active = o.items[0].id;
@@ -587,7 +616,8 @@ export default function App() {
         if (prior && /^baseline/i.test(prior.timepoint)) setTimepoint('Follow-up 1'); else if (k) setTimepoint(`Follow-up ${+k + 1}`); else if (timepoint === 'Baseline') setTimepoint('Follow-up 1');
       }
       olSync();
-      onOutline({ z, y: y * 2 + 1, x: x * 2 + 1, distMm: 0, start: true });
+      onOutline({ z, y: y * 2 + 1, x: x * 2 + 1, distMm: 0, start: true, proposed: true });
+      logRef.current('match', `${r.confidence.level}${r.confidence.reasons.length ? `: ${r.confidence.reasons.join(', ')}` : ''}; from ${it.label} on ${B.name}`);
       setInfo(`Proposed from ${it.label} on the baseline: ${r.confidence.level}. Check the location, then fix with the drag or brush.`);
     };
     const cp = (a) => a.slice();
@@ -623,11 +653,27 @@ export default function App() {
 
   const winVal = useMemo(() => wl || WINDOWS[win], [wl, win]);
   const m = useMemo(() => (series && L.current.zr ? measure(L.current.mask, series.gd, series.spDS, L.current.zr) : null), [series, version]);
+  mRef.current = m;
+  useEffect(() => { // the volume after an edit is read once the outline has settled
+    if (computing || !trailRef.current.some((e) => e.vol == null)) return undefined;
+    const t = setTimeout(stampTrail, 700);
+    return () => clearTimeout(t);
+  }, [m, trailN, computing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveImage = () => {
+    if (!viewerRef.current) return;
+    const o = ol.current, it = o.items.find((x) => x.id === o.active), a = document.createElement('a');
+    a.href = viewerRef.current.png();
+    a.download = `${(o.label || 'scan').replace(/[^\w.-]+/g, '_')}_${it ? it.label : 'N1'}_slice${slice + 1}_${new Date().toTimeString().slice(0, 8).replace(/:/g, '')}.png`;
+    a.click();
+    logEdit('image', `slice ${slice + 1} saved as ${a.download}`);
+  };
 
   const addRow = () => {
     if (!m) return;
     const cur = ol.current.items.find((x) => x.id === ol.current.active);
     clock.current.rows = [...clock.current.rows, elapsedMs()]; saveTime();
+    logRef.current('row', `row ${rows.length + 1} added`);
     setFlash(rows.length); setTimeout(() => setFlash(-1), 1600);
     setRows((rs) => [...rs, makeRow({ meta: series.meta, spacing: series.spacing, m, noduleId: cur ? cur.label : 'N1', timepoint, initials, minutes: elapsedMs() / 60000, includeVolume, matchStatus: cur && cur.match ? cur.match.level : '', lobe: cur && cur.match ? cur.match.lobe || '' : '', type: cur && cur.match ? cur.match.type || '' : '' })]);
   };
@@ -685,15 +731,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!timeOpen && !wlOpen) return undefined;
+    if (!timeOpen && !wlOpen && !trailOpen) return undefined;
     const close = (e) => {
-      if (e.type === 'keydown') { if (e.key === 'Escape') { setTimeOpen(false); setWlOpen(false); } return; }
-      if (!e.target.closest('.timepanel, .timer')) setTimeOpen(false);
+      if (e.type === 'keydown') { if (e.key === 'Escape') { setTimeOpen(false); setTrailOpen(false); setWlOpen(false); } return; }
+      if (!e.target.closest('.timepanel, .timer, .trailbtn')) { setTimeOpen(false); setTrailOpen(false); }
       if (!e.target.closest('.wlpanel, .wlbtn')) setWlOpen(false);
     };
     window.addEventListener('keydown', close); window.addEventListener('pointerdown', close);
     return () => { window.removeEventListener('keydown', close); window.removeEventListener('pointerdown', close); };
-  }, [timeOpen, wlOpen]);
+  }, [timeOpen, wlOpen, trailOpen]);
 
   useEffect(() => {
     if (!helpOpen) return undefined;
@@ -731,9 +777,11 @@ export default function App() {
             <button className="timebtn pausebtn" title={paused ? 'Resume the timer (P)' : 'Pause the timer (P)'} aria-label={paused ? 'Resume the timer' : 'Pause the timer'} onClick={togglePause}><Icon name={paused ? 'play' : 'pause'} size={14} /></button>
           </span>
         )}
+        {series && <button className={`btn helpbtn trailbtn ${trailOpen ? 'on' : ''}`} aria-label="Edit trail" title="Edit trail: every correction on this scan" onClick={() => setTrailOpen((o) => !o)}><Icon name="list" size={15} /></button>}
         <button className="btn helpbtn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => setHelpOpen((o) => !o)}><Icon name="help" size={15} /></button>
         {series && <FolderPicker onFiles={(f) => loadFiles(f, true)} label="Match to baseline" />}
         {series && <FolderPicker onFiles={loadFiles} label="Open folder" />}
+        {trailOpen && <TrailPanel events={trailRef.current} scanLabel={ol.current.label || 'This scan'} onNote={(t) => { logEdit('note', t); }} onClear={() => { trailRef.current = []; trailSave(); setTrailN((n) => n + 1); }} />}
         {timeOpen && <TimePanel log={timeLog} nowKey={ol.current.key} liveMin={minutes} rows={rows} onClear={() => { setTimeLog({}); save('timelog', {}); }} />}
         {helpOpen && (
           <div className="help" role="dialog" aria-label="Keyboard shortcuts">
@@ -753,7 +801,7 @@ export default function App() {
       <section className="stage" onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
         {series ? (
           <>
-              <Viewer ref={viewerRef} orient={orientationLabels(series.meta.iop)} onViewChange={setZoom} onGesture={(on) => { setGesture(on); if (!on && pendingExact.current && last.current) { clearTimeout(exactTimer.current); pendingExact.current = false; requestRef.current(last.current, undefined, false); } }} showOutline={!(hidePinned || holdHide)} axes={axesShow} vol={series.vol} dims={series.dims} spacing={series.spacing} gd={series.gd} mask={L.current.mask} others={others} version={version}
+              <Viewer ref={viewerRef} orient={orientationLabels(series.meta.iop)} onViewChange={setZoom} onGesture={(on) => { setGesture(on); if (!on) endGesture(); if (!on && pendingExact.current && last.current) { clearTimeout(exactTimer.current); pendingExact.current = false; requestRef.current(last.current, undefined, false); } }} showOutline={!(hidePinned || holdHide)} axes={axesShow} vol={series.vol} dims={series.dims} spacing={series.spacing} gd={series.gd} mask={L.current.mask} others={others} version={version}
                 slice={slice} win={winVal} tool={tool} onSlice={setSlice} onOutline={onOutline} onBrush={paint} />
             {status && (
               <div className="scaninfo" title={status}>
@@ -769,6 +817,7 @@ export default function App() {
               <div className="toolwrap"><button className="vb" aria-label="Zoom in" onClick={() => viewerRef.current.zoomBy(1.25)}><Icon name="zoomin" size={18} /></button><Tip down title="Zoom in" keys="+" text="Zooms around the centre. Ctrl/Cmd+scroll zooms at the cursor." /></div>
               <div className="toolwrap"><button className="vb" aria-label="Fit to window" onClick={() => viewerRef.current.fit()}><Icon name="fit" size={18} /></button><Tip down title="Fit" keys="0" text="Reset zoom. When zoomed, hold Space and drag to pan." /></div>
               <div className="vsep" />
+              <div className="toolwrap"><button className="vb" aria-label="Save image" onClick={saveImage}><Icon name="camera" size={18} /></button><Tip down title="Save image" text="Saves this slice with the outline as a PNG, for example to show a correction before and after." /></div>
               <div className="toolwrap"><button className={`vb ${hidePinned ? 'on' : ''}`} aria-label="Show or hide the outline" onClick={() => setHidePinned((h) => !h)}><Icon name={hidePinned ? 'eyeoff' : 'eye'} size={18} /></button><Tip down title="Outline on or off" keys="H" text="Hold H to peek at the raw image. Click to keep the outline hidden." /></div>
               <div className="vsep" />
               <div className="toolwrap">

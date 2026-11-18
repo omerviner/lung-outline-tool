@@ -47,6 +47,9 @@ Practice scans are public: The Cancer Imaging Archive, RIDER Lung CT and RIDER-L
 
 See `NOTICE.md` for credits and licences.
 
+## Edit trail
+The list button in the header opens the **edit trail** of the open scan: every click, drag resize, tolerance change, brush add or erase, undo, clear, match proposal, saved image and row, in order, with the active time and the volume after each step. A summary per tumour counts them and shows how a matched proposal was handled (accepted as proposed, or edited with how many edits). Add a note to label an edge case ("chest wall leak, erased"); the camera button in the toolbar saves the slice with its outline as a PNG so a correction can be shown before and after. The trail is kept in the browser per scan and exports to CSV.
+
 ## Follow-up matching
 With a follow-up scan open, **Match to baseline** (header) asks for the baseline scan's folder (it needs the outline you saved there in this browser), runs the lung model on it, and proposes where the same tumour is on the open scan (lung registration, then a local image match). The proposal appears as a new tumour, flagged **Confident** or **Uncertain** in the panel and in the row's Match status; check the location and fix it with the drag or brush. On same-day test-retest pairs the seed hit the expert outline 28 of 28 times (see `notes/opus_match_report.md`); months-apart scans are untested.
 

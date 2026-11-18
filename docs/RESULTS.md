@@ -13,6 +13,7 @@ For each scan, a researcher scrolls 250 to 400 slices twice to find tumours, mea
 - **Sheet row.** One row per tumour in the lab's own 18 columns and wording (Baseline / Follow-up 1 timepoints, lobe and type drop-downs, volume in mm3, dates YYYY-MM-DD, slice from 1). Copy rows pastes into Excel; CSV download. The row fills patient, date, series, thickness and slice from the DICOM header, and Minutes from an active-time clock.
 - **Follow-up matching.** "Match to baseline": from a baseline scan's saved outline, propose the tumour on the open follow-up (lung registration, then a local image match), flagged Confident or Uncertain. "Paste baseline rows" lets the follow-up inherit nodule ID, lobe, type and the next timepoint from the lab's own sheet.
 - **Lung model in the browser.** LungMask R231 (Apache-2.0) via ONNX Runtime Web keeps outlines inside the lung: about 30 s per scan with WebGPU, about 3 min on a CPU (every third slice; the lung mask keeps Dice 0.99 against all slices). Outlines work while it runs.
+- **Edit trail.** Every correction (click, drag resize, tolerance, brush add or erase, undo, clear, match proposal, row) is logged per scan with active time and the volume after it; per-tumour summary, notes for edge cases, a Save image button (slice with outline as PNG) and CSV export. It shows how much hand work each outline and each proposed match needed.
 - **Time measurement built in.** Active-time clock with pause, a per-scan time log (finding, outline and rows, total, by-hand model) with CSV export.
 
 ## What works (measured)
@@ -69,7 +70,7 @@ Finding is unchanged, so about half is the ceiling; "40 to 10 minutes" is not re
 
 **What replaces the model (trials, in progress):** Daniel runs the tool on a lab machine (no patient data) on his own or practice scans and reports his usual by-hand time for the same tumours. For each scan, the in-app time log gives measured active minutes (finding, outline and rows, total) and exports CSV. Per tumour and per follow-up I collect:
 1. Minutes with the tool (time log) against his by-hand minutes for the same step.
-2. Whether the proposed outline was accepted, edited or redone; whether the matched place was right, moved or re-clicked; how often a Confident proposal was wrong.
+2. Whether the proposed outline was accepted, edited or redone (the edit trail counts the corrections and shows the volume after each; Daniel also covers the failure cases listed above, labelled with notes and saved images, so the lab meeting sees how he fixes them); whether the matched place was right, moved or re-clicked; how often a Confident proposal was wrong.
 3. Quality: the tool's long axis and volume against his usual ruler measurement and freehand outline on the same tumours (difference in mm and %), compared with the reference that same-day repeats differ by about 3 mm and 9.5%.
 Report medians and ranges, not only means; use different scans for the by-hand and tool timings so he does not learn a scan; say how many tumours the sample holds. Until then every time-saved figure above is labelled "modelled".
 
