@@ -44,7 +44,8 @@ The result survives shifts up to 80 mm and rotations up to 15 degrees of the fol
 - **Hazy, ground-glass or spiculated edges** are under-outlined (the solid part, not the rim); lowering the tolerance usually recovers them.
 - **Matching is only validated on easy pairs.** The two scans of a pair are minutes apart (same session). Months-apart growth, different breathing depth and new findings are untested; the numbers say nothing about them. One Confident proposal was wrong, on a scan whose expert outline does not match the CT (treated as a data problem).
 - **No automatic finding.** Tested (lung mask plus blob finder found 32 of 59 expert tumours, weak under 2 mL and over 40 mL), declined by the lab, left out.
-- **No slice-to-slice interpolation for the brush** yet; the brush paints through several slices instead.
+- **No slice-to-slice interpolation in the app yet.** The method works in the research code (drawing every 3rd slice and interpolating the rest keeps Dice 0.94 against the expert outline and skips about 63% of slice edits; these are slice counts, not measured times), but it is not wired in; the brush paints through several slices instead.
+- **Leak fixes were tried and mostly failed.** A chest-wall exclusion did not reduce leaks without losing tumours that touch the pleura or mediastinum. A size-aware grow-back raised held-out small-nodule Dice from 0.73 to 0.78 but lowered 10-40 mL tumours (0.67 to 0.63), and the gain rests on few patients, so v2 stays the default.
 - **The CPU path is slow** (about 3 min per scan, twice for matching) and WebAssembly multi-threading hung in the browser worker, so it is single-threaded. Needs WebGPU for about 30 s.
 - **Quality of axes:** long and short axis come from the 3D outline and are approximate, not clinical (RECIST) measurements.
 - **Only RIDER lung CT** (thin slices, one expert outline per scan) was tested. Thick-slice series show a warning; other scanners, protocols and tumour types are untested. Firefox and Safari are untested.
@@ -80,9 +81,9 @@ Report medians and ranges, not only means; use different scans for the by-hand a
 
 ## What I would do next
 1. Daniel's timed trials on real follow-up pairs (months apart); fix what he reports.
-2. Slice interpolation for the brush; chest-wall and size-aware improvements for the 1-in-6 leaks (in progress as a separate experiment).
+2. Wire slice interpolation into the brush; revisit the size-aware grow-back on a larger set of small nodules; the 1-in-6 leaks still need the brush or an inward drag.
 3. Re-score matching on any months-apart pair available; add a side-by-side baseline view.
 4. Faster CPU path (quantised model) or require WebGPU.
 
 ## Where things are
-Source: https://github.com/omerviner/lung-outline-tool (app in `src/`, algorithms in `src/core/`, research scripts, reports and result tables in `research/` and `docs/`). Reports: `research/opus_report.md` (outline method and scores), `research/opus_match_report.md` (matching), `research/time_saved_tracker.md` (time model and trial log), `research/client_side_test.md` (browser model test).
+Source: https://github.com/omerviner/lung-outline-tool (app in `src/`, algorithms in `src/core/`, research scripts, reports and result tables in `research/` and `docs/`). Reports: `research/opus_report.md` (outline method and scores), `research/opus_outline_b_report.md` (leak fixes and interpolation), `research/opus_match_report.md` (matching), `research/time_saved_tracker.md` (time model and trial log), `research/client_side_test.md` (browser model test).
