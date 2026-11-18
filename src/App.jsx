@@ -22,6 +22,7 @@ const TOOLS = [
 // time model from Daniel's estimates (notes/time_saved_tracker.md): minutes by hand for a scan with n tumours
 const MODEL = { findMin: 15, perTumourMin: 11 }; // finding 10-20 per scan; per tumour axes 3 + typing 4 + 1 in 5 full outlines x 20
 const modelMinutes = (n) => MODEL.findMin + MODEL.perTumourMin * n;
+const mm3 = (ml) => Math.round(ml * 1000).toLocaleString('en-US'); // the lab reports volume in mm3
 const fmt1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
 
 /** Binary mask over slices z0..z1 as alternating run lengths (starting with zeros): small enough for localStorage. */
@@ -741,7 +742,7 @@ export default function App() {
 
             <aside className="floating inspector">
               <div>
-                <div className="big">{m ? m.volumeMl.toFixed(2) : '-'}<small>mL</small></div>
+                <div className="big">{m ? mm3(m.volumeMl) : '-'}<small>mm³</small></div>
                 <p className="hint">{computing ? 'Computing…' : m ? (info || `Largest on slice ${m.bestSlice + 1}`) : info || 'No outline yet'}</p>
               </div>
               <div className="kv">
@@ -759,7 +760,7 @@ export default function App() {
                 <div className="olchips">
                 {olView.map((o) => (
                   <div key={o.id} className={`olchip ${o.id === activeId ? 'on' : ''}`}>
-                    <button className="olpick" onClick={() => switchTo(o.id)} title="Open this outline"><b>{o.label}</b><span>{(o.id === activeId && m ? m.volumeMl : o.vol) ? `${(o.id === activeId && m ? m.volumeMl : o.vol).toFixed(1)} mL` : 'empty'}</span></button>
+                    <button className="olpick" onClick={() => switchTo(o.id)} title="Open this outline"><b>{o.label}</b><span>{(o.id === activeId && m ? m.volumeMl : o.vol) ? `${mm3(o.id === activeId && m ? m.volumeMl : o.vol)} mm³` : 'empty'}</span></button>
                     {olView.length > 1 && <button className="olx" aria-label={`Delete ${o.label}`} title="Delete this outline" onClick={() => removeOutline(o.id)}>×</button>}
                   </div>
                 ))}

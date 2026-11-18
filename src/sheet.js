@@ -5,7 +5,7 @@ export const COLUMNS = [
   ['patientId', 'Patient ID'], ['date', 'Date'], ['timepoint', 'Timepoint'], ['seriesNumber', 'Series number'],
   ['sliceThickness', 'Slice thickness (mm)'], ['noduleId', 'Nodule ID'], ['lobe', 'Lobe'], ['sliceNumber', 'Slice number'],
   ['type', 'Type'], ['longMm', 'Long axis (mm)'], ['shortMm', 'Short axis (mm)'], ['meanMm', 'Mean diameter (mm)'],
-  ['solid', 'Solid component'], ['volumeMl', 'Volume (mL)'], ['matchStatus', 'Match status'],
+  ['solid', 'Solid component'], ['volumeMm3', 'Volume (mm3)'], ['matchStatus', 'Match status'],
   ['minutes', 'Minutes on scan'], ['initials', 'Initials'], ['notes', 'Notes'],
 ];
 
@@ -20,7 +20,7 @@ export function makeRow({ meta, spacing, m, noduleId, timepoint, initials, minut
     patientId: meta.patientId || '', date: fmtDate(meta.studyDate), timepoint, seriesNumber: meta.seriesNumber ?? '',
     sliceThickness: +spacing[0].toFixed(2), noduleId, lobe: '', sliceNumber: m.bestSlice + 1, type: '',
     longMm: +m.longMm.toFixed(1), shortMm: +m.shortMm.toFixed(1), meanMm: +m.meanMm.toFixed(1), solid: '',
-    volumeMl: includeVolume ? +m.volumeMl.toFixed(2) : '', matchStatus: '', minutes: +minutes.toFixed(1),
+    volumeMm3: includeVolume ? Math.round(m.volumeMl * 1000) : '', matchStatus: '', minutes: +minutes.toFixed(1),
     initials, notes: '',
   };
 }
@@ -47,7 +47,7 @@ export const COLUMN_META = {
   type: { group: 'Nodule', w: 112, edit: true },
   longMm: { group: 'Measurements', w: 100, num: true, measured: true }, shortMm: { group: 'Measurements', w: 104, num: true, measured: true },
   meanMm: { group: 'Measurements', w: 122, num: true, measured: true }, solid: { group: 'Measurements', w: 132, edit: true },
-  volumeMl: { group: 'Measurements', w: 100, num: true, measured: true },
+  volumeMm3: { group: 'Measurements', w: 100, num: true, measured: true },
   matchStatus: { group: 'Review', w: 132, select: true }, minutes: { group: 'Review', w: 130, num: true },
   initials: { group: 'Review', w: 84 }, notes: { group: 'Review', w: 260, edit: true },
 };
