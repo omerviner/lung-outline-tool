@@ -42,3 +42,6 @@ After a scan loads, the LungMask model (ONNX, `public/model/`) runs in a backgro
 Practice scans are public: The Cancer Imaging Archive, RIDER Lung CT and RIDER-LungCT-Seg. No scans are stored in this repository; load a DICOM folder from disk.
 
 See `NOTICE.md` for credits and licences.
+
+## Deploy (GitHub Pages)
+Push to a GitHub repository whose default branch is `main`, then in Settings > Pages choose "GitHub Actions". `.github/workflows/pages.yml` builds with `BASE=/<repo>/` and publishes `dist`. The site is static: scans are read in the browser and never uploaded. Locally, `npm run build` uses base `/`.
