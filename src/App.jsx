@@ -82,7 +82,7 @@ function LungChip({ s }) {
     : 'Lung model failed';
   const title = s.phase === 'error' ? s.message
     : s.phase === 'ready' ? `The lung model keeps outlines inside the lung. Ready in ${Math.round(s.ms / 1000)} s (${s.backend === 'webgpu' ? 'WebGPU' : 'CPU'}).`
-    : `The lung model keeps outlines inside the lung. You can already click and outline: until it finishes, outlines are less accurate near the chest wall and update by themselves when it is ready.${s.ep === 'wasm' ? ' This computer has no WebGPU, so it runs on the CPU and takes a few minutes.' : ''}`;
+    : `The lung model keeps outlines inside the lung. You can already click and outline: until it finishes, outlines are less accurate near the chest wall and update by themselves when it is ready.${s.ep === 'wasm' ? ' This computer has no WebGPU, so it runs on the CPU and takes several minutes (about 8 on a laptop for a 236-slice scan).' : ''}`;
   return (
     <span className={`lungchip ${s.phase}`} title={title}>
       {(s.phase === 'loading' || s.phase === 'running') && <i className="bar"><i style={{ width: `${pct}%` }} /></i>}
