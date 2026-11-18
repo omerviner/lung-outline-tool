@@ -1,0 +1,11 @@
+lungmask==0.2.22
+matplotlib==3.11.2
+numpy==2.5.5
+onnx==1.23.2
+onnxruntime==1.32.0
+pandas==3.1.1
+pydicom==3.0.2
+scikit-image==0.26.0
+scipy==1.18.1
+simpleitk==2.5.7
+torch==2.15.0

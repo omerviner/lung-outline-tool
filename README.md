@@ -4,6 +4,8 @@
 
 Scans are read in the browser and never uploaded. Research use only; not a medical device, and no clinical claims.
 
+**Results:** [docs/RESULTS.md](docs/RESULTS.md) (what works, what fails, how the time saved is measured). Method, scores and scripts: [research/](research/README.md).
+
 Data for testing: TCIA RIDER Lung CT and RIDER-LungCT-Seg (CC BY). Model: LungMask, Apache-2.0. See `NOTICE.md`.
 
 ## Using it

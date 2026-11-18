@@ -1,0 +1,11 @@
+{
+  "name": "longmarker-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared image-processing core (DICOM load, lung mask, candidate finder). Runs in Node and in the browser. Research use only.",
+  "dependencies": {
+    "dicom-parser": "^1.8.21",
+    "onnxruntime-node": "1.20.1"
+  }
+}
