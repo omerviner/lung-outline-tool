@@ -2,7 +2,7 @@
 // For each expert outline, keep every k-th slice (k = 2..6, plus the first and last slice), interpolate the rest,
 // and score against the full expert outline. Also reports the share of slices the user would not have to draw.
 import fs from 'node:fs';
-import { interpolateSlices } from '../../src/core/interp.js';
+import { interpolateSlices } from '../core_experiments/interp.js';
 const [jobsFile, outCsv] = process.argv.slice(2);
 const jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
 const rows = ['name,k,slices,drawn,saved_pct,dice_interp,dice_nearest'];

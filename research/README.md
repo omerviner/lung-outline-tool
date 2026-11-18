@@ -8,3 +8,4 @@ Everything here supports `docs/RESULTS.md`. It is not needed to run the app. Res
 - `package.json`, `requirements.txt`: dependencies for the scripts (`npm install` here; a Python venv for the `.py` files).
 
 The scripts expect the original project layout: the TCIA data (RIDER Lung CT and RIDER-LungCT-Seg, download with the TCIA Data Retriever, CC BY) under `data/`, the expert masks and downsampled lung masks under `longmarker-tool/work/`, and the pair list `scan_index.csv`. The data is not in this repository, so the scripts are provided for reading and for reproducing the scoring on a machine that has the data; the app itself needs none of it.
+- `core_experiments/`: `clickoutline_v3.js` (opt-in size-aware variant) and `interp.js` (slice interpolation), not used by the app yet.
