@@ -294,3 +294,8 @@ tbody tr { scroll-snap-align: start; }
 .ttable th:first-child, .ttable td:first-child { text-align: left; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
 .ttable tr.now td { font-weight: 600; }
 .ttable td:first-child { min-width: 170px; }
+
+.matchnote { font-size: .74rem; line-height: 1.35; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--sand); background: var(--ivory); }
+.matchnote.ok { border-color: var(--deep); }
+.matchnote.warn { border-color: #d9884a; background: #fbeee0; }
+.modalcard .serieslist .btn { justify-content: space-between; }

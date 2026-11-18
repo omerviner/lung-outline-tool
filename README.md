@@ -45,5 +45,8 @@ Practice scans are public: The Cancer Imaging Archive, RIDER Lung CT and RIDER-L
 
 See `NOTICE.md` for credits and licences.
 
+## Follow-up matching
+With a follow-up scan open, **Match to baseline** (header) asks for the baseline scan's folder (it needs the outline you saved there in this browser), runs the lung model on it, and proposes where the same tumour is on the open scan (lung registration, then a local image match). The proposal appears as a new tumour, flagged **Confident** or **Uncertain** in the panel and in the row's Match status; check the location and fix it with the drag or brush. On same-day test-retest pairs the seed hit the expert outline 28 of 28 times (see `notes/opus_match_report.md`); months-apart scans are untested.
+
 ## Deploy (GitHub Pages)
 Push to a GitHub repository whose default branch is `main`, then in Settings > Pages choose "GitHub Actions". `.github/workflows/pages.yml` builds with `BASE=/<repo>/` and publishes `dist`. The site is static: scans are read in the browser and never uploaded. Locally, `npm run build` uses base `/`.

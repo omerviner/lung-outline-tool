@@ -4,5 +4,5 @@
 set -e
 cd "$(dirname "$0")/.."
 SRC=../core/src
-for f in dicom.js morph.js blobs.js lungmask.js clickoutline.js; do cp "$SRC/$f" "src/core/$f"; done
+for f in dicom.js morph.js blobs.js lungmask.js clickoutline.js match.js; do cp "$SRC/$f" "src/core/$f"; done
 echo "synced: $(ls src/core | tr '\n' ' ')"

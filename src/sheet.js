@@ -15,12 +15,12 @@ export function fmtDate(d) {
   return d && d.length === 8 ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : d || '';
 }
 
-export function makeRow({ meta, spacing, m, noduleId, timepoint, initials, minutes, includeVolume }) {
+export function makeRow({ meta, spacing, m, noduleId, timepoint, initials, minutes, includeVolume, matchStatus = '' }) {
   return {
     patientId: meta.patientId || '', date: fmtDate(meta.studyDate), timepoint, seriesNumber: meta.seriesNumber ?? '',
     sliceThickness: +spacing[0].toFixed(2), noduleId, lobe: '', sliceNumber: m.bestSlice + 1, type: '',
     longMm: +m.longMm.toFixed(1), shortMm: +m.shortMm.toFixed(1), meanMm: +m.meanMm.toFixed(1), solid: '',
-    volumeMm3: includeVolume ? Math.round(m.volumeMl * 1000) : '', matchStatus: '', minutes: +minutes.toFixed(1),
+    volumeMm3: includeVolume ? Math.round(m.volumeMl * 1000) : '', matchStatus, minutes: +minutes.toFixed(1),
     initials, notes: '',
   };
 }

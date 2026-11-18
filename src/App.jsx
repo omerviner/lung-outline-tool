@@ -3,10 +3,11 @@ import Viewer from './Viewer.jsx';
 import { Icon } from './icons.jsx';
 import OutlineWorker from './outline.worker.js?worker';
 import LungWorker from './lungmask.worker.js?worker';
+import MatchWorker from './match.worker.js?worker';
 import { parseSlice, buildVolume } from './core/dicom.js';
 import { downsample } from './core/blobs.js';
 import { measure, axesOnSlice } from './measure.js';
-import { COLUMNS, COLUMN_META, MATCH_OPTIONS, makeRow, toTSV, toCSV, groupSpans, splitLabel } from './sheet.js';
+import { COLUMNS, COLUMN_META, MATCH_OPTIONS, makeRow, toTSV, toCSV, groupSpans, splitLabel, fmtDate } from './sheet.js';
 
 const ROW_H = 34;            // table body row height
 const STRIP_BASE = 106 + 15; // first guess of the strip's fixed height (header bar, table head, scrollbar); measured once the table exists
@@ -203,6 +204,9 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [lungState, setLungState] = useState({ phase: 'idle' });
   const lungT0 = useRef(0);
+  const dsRef = useRef(null), lungRef = useRef(null); // this scan's downsampled volume and lung mask, kept for matching
+  const baseRef = useRef(null), baseLungWorker = useRef(null);
+  const [match, setMatch] = useState(null); // follow-up matching dialog: { phase: 'reading'|'lung'|'choose'|'running'|'error', ... }
   const [hidePinned, setHidePinned] = useState(false);
   const [holdHide, setHoldHide] = useState(false);
   const viewerRef = useRef(null);
@@ -474,6 +478,7 @@ export default function App() {
     const spDS = [v.spacing[0], v.spacing[1] * 2, v.spacing[2] * 2];
     L.current = { base: new Uint8Array(n), add: new Uint8Array(n), erase: new Uint8Array(n), mask: new Uint8Array(n), zr: null, baseZr: null, addZr: null, edited: false };
     hist.current = []; last.current = null; queued.current = null; inflight.current = false; setComputing(false);
+    dsRef.current = { v: ds.v.slice(), gd: ds.dims, sp: spDS }; lungRef.current = null;
     workerRef.current.postMessage({ type: 'init', v: ds.v.buffer, gd: ds.dims, sp: spDS }, [ds.v.buffer]);
     // lung model in the background: outlines work at once, and are upgraded when the lung limit is ready
     if (lungWorkerRef.current) lungWorkerRef.current.terminate();
@@ -492,6 +497,7 @@ export default function App() {
       else if (r.type === 'error') setLungState({ phase: 'error', message: r.message });
       else if (r.type === 'done') {
         if (import.meta.env.DEV) window.__lung = { voxels: new Uint8Array(r.lung).reduce((s, x) => s + x, 0), backend: r.backend, ms: r.ms };
+        lungRef.current = new Uint8Array(r.lung.slice(0));
         workerRef.current.postMessage({ type: 'lung', lung: r.lung }, [r.lung]);
         setLungState({ phase: 'ready', backend: r.backend, ms: r.ms });
         if (last.current) { requestRef.current(last.current); setInfo('Outline updated with the lung limit.'); }
@@ -521,7 +527,66 @@ export default function App() {
     setWarn(t > 1.3 ? `Slices are ${t.toFixed(2)} mm thick; the lab reads 1.0 to 1.25 mm series.` : '');
   }, []);
 
-  const loadFiles = useCallback(async (fileList) => {
+  // ---- follow-up matching: load the baseline scan, find the tumour on this scan ----
+  const openBaseline = async (bytes) => {
+    if (!seriesRef.current) return;
+    setMatch({ phase: 'reading' });
+    await new Promise((r) => setTimeout(r, 20));
+    try {
+      const v = buildVolume(bytes), ds = downsample(v.vol, v.dims), sp = [v.spacing[0], v.spacing[1] * 2, v.spacing[2] * 2];
+      const key = `${v.meta.patientId}|${v.meta.seriesNumber}|${v.dims.join('x')}|${v.meta.studyDate}`;
+      const saved = store(`outlines:${key}`, null), items = (saved ? saved.items : []).filter((it) => it.rle && it.zr);
+      if (!items.length) { setMatch({ phase: 'error', message: `No saved outline for that scan (${v.meta.patientId || 'unknown'}, series ${v.meta.seriesNumber}, ${v.meta.studyDate || 'no date'}). Open it first, outline the tumour, then come back.` }); return; }
+      baseRef.current = { v: ds.v, dims: ds.dims, sp, items: items.map((it) => ({ ...it, mm3: Math.round(rleVoxels(it.rle) * sp[0] * sp[1] * sp[2]) })), lung: null, name: `${v.meta.patientId || 'Scan'} · series ${v.meta.seriesNumber} · ${fmtDate(v.meta.studyDate)}` };
+      setMatch({ phase: 'lung', pct: 0 });
+      if (baseLungWorker.current) baseLungWorker.current.terminate();
+      const lw = new LungWorker(); baseLungWorker.current = lw;
+      lw.onmessage = (ev) => {
+        const r = ev.data;
+        if (r.type === 'progress') setMatch((o) => (o && o.phase === 'lung' ? { phase: 'lung', pct: r.total ? Math.round((100 * r.done) / r.total) : 0 } : o));
+        else if (r.type === 'error') setMatch({ phase: 'error', message: `The lung model failed on the baseline scan: ${r.message}` });
+        else if (r.type === 'done') { baseRef.current.lung = new Uint8Array(r.lung); lw.terminate(); setMatch({ phase: 'choose', name: baseRef.current.name, items: baseRef.current.items.map(({ id, label, mm3 }) => ({ id, label, mm3 })) }); }
+      };
+      const copy = new Int16Array(v.vol);
+      lw.postMessage({ type: 'run', id: 1, vol: copy.buffer, dims: v.dims }, [copy.buffer]);
+    } catch (err) { setMatch({ phase: 'error', message: `Could not read that folder as a scan: ${(err && err.message) || err}` }); }
+  };
+  const runMatch = (itemId) => {
+    const B = baseRef.current, F = dsRef.current, fl = lungRef.current;
+    if (!B || !F || !fl) { setMatch({ phase: 'error', message: 'The lung model of this scan is not ready yet. Wait for "Lung limit on" in the header and try again.' }); return; }
+    const it = B.items.find((x) => x.id === itemId), [, ny, nx] = B.dims, sl = ny * nx;
+    const mask = rleDecode(it.rle, it.zr[0], B.v.length, sl);
+    let n = 0, cz = 0, cy = 0, cx = 0; // click point: the outline voxel closest to its centre of mass
+    for (let z = it.zr[0]; z <= it.zr[1]; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) if (mask[z * sl + y * nx + x]) { n++; cz += z; cy += y; cx += x; }
+    cz /= n; cy /= n; cx /= n;
+    let best = Infinity, seed = [0, 0, 0];
+    for (let z = it.zr[0]; z <= it.zr[1]; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) if (mask[z * sl + y * nx + x]) {
+      const d = ((z - cz) * B.sp[0]) ** 2 + ((y - cy) * B.sp[1]) ** 2 + ((x - cx) * B.sp[2]) ** 2;
+      if (d < best) { best = d; seed = [z, y, x]; }
+    }
+    setMatch({ phase: 'running', name: B.name });
+    const w = new MatchWorker();
+    w.onmessage = (ev) => {
+      const r = ev.data; w.terminate();
+      if (r.type === 'error') { setMatch({ phase: 'error', message: `Matching failed: ${r.message}` }); return; }
+      setMatch(null);
+      newOutline(); // the proposal becomes a new tumour, outlined from the proposed point like a click
+      const [z, y, x] = r.seed;
+      setSlice(z);
+      const o = ol.current, cur = o.items.find((q) => q.id === o.active);
+      if (cur) cur.match = { level: r.confidence.level, reasons: r.confidence.reasons, from: `${it.label} on ${B.name}` };
+      olSync();
+      onOutline({ z, y: y * 2 + 1, x: x * 2 + 1, distMm: 0, start: true });
+      setInfo(`Proposed from ${it.label} on the baseline: ${r.confidence.level}. Check the location, then fix with the drag or brush.`);
+    };
+    const cp = (a) => a.slice();
+    w.postMessage({
+      baseline: { vol: cp(B.v), dims: B.dims, spacing: B.sp, mask, seed, lung: cp(B.lung) },
+      follow: { vol: cp(F.v), dims: F.gd, spacing: F.sp, lung: cp(fl) },
+    });
+  };
+
+  const loadFiles = useCallback(async (fileList, asBaseline = false) => {
     const files = Array.from(fileList);
     if (!files.length) return;
     setStatus(`Reading ${files.length} files...`);
@@ -539,9 +604,10 @@ export default function App() {
     const all = Object.values(groups).sort((p, q) => (Number(q.thickness <= 1.3) - Number(p.thickness <= 1.3)) || q.bytes.length - p.bytes.length);
     if (!all.length) { setStatus('No DICOM images found in that selection.'); return; }
     const cands = all.filter((g) => g.bytes.length >= 10);
+    if (asBaseline) { setStatus(''); await openBaseline((cands[0] || all[0]).bytes); return; }
     if (cands.length > 1) { setStatus(''); setChooser({ groups: cands, sel: 0 }); return; } // several series: let the user pick
     await openGroup((cands[0] || all[0]).bytes);
-  }, [openGroup]);
+  }, [openGroup]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (import.meta.env.DEV) window.__loadFiles = loadFiles; }, [loadFiles]);
 
   const winVal = useMemo(() => wl || WINDOWS[win], [wl, win]);
@@ -552,7 +618,7 @@ export default function App() {
     const cur = ol.current.items.find((x) => x.id === ol.current.active);
     clock.current.rows = [...clock.current.rows, elapsedMs()]; saveTime();
     setFlash(rows.length); setTimeout(() => setFlash(-1), 1600);
-    setRows((rs) => [...rs, makeRow({ meta: series.meta, spacing: series.spacing, m, noduleId: cur ? cur.label : 'N1', timepoint, initials, minutes: elapsedMs() / 60000, includeVolume })]);
+    setRows((rs) => [...rs, makeRow({ meta: series.meta, spacing: series.spacing, m, noduleId: cur ? cur.label : 'N1', timepoint, initials, minutes: elapsedMs() / 60000, includeVolume, matchStatus: cur && cur.match ? cur.match.level : '' })]);
   };
   const edit = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const copy = async () => { await navigator.clipboard.writeText(toTSV(rows, false)); setStatus(`Copied ${rows.length} rows: paste into the sheet.`); };
@@ -648,6 +714,7 @@ export default function App() {
           </span>
         )}
         <button className="btn helpbtn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => setHelpOpen((o) => !o)}><Icon name="help" size={15} /></button>
+        {series && <FolderPicker onFiles={(f) => loadFiles(f, true)} label="Match to baseline" />}
         {series && <FolderPicker onFiles={loadFiles} label="Open folder" />}
         {timeOpen && <TimePanel log={timeLog} nowKey={ol.current.key} liveMin={minutes} rows={rows} onClear={() => { setTimeLog({}); save('timelog', {}); }} />}
         {helpOpen && (
@@ -745,6 +812,10 @@ export default function App() {
                 <div className="big">{m ? mm3(m.volumeMl) : '-'}<small>mm³</small></div>
                 <p className="hint">{computing ? 'Computing…' : m ? (info || `Largest on slice ${m.bestSlice + 1}`) : info || 'No outline yet'}</p>
               </div>
+              {(() => { const it = ol.current.items.find((q) => q.id === activeId); return it && it.match ? (
+                <div className={`matchnote ${it.match.level === 'Confident' ? 'ok' : 'warn'}`} title={it.match.reasons.join('; ') || 'Image match is strong and distinct'}>
+                  <b>{it.match.level}</b> match from {it.match.from}{it.match.reasons.length ? `: ${it.match.reasons.join(', ')}` : ''}. Confirm the location.
+                </div>) : null; })()}
               <div className="kv">
                 <div><b>{m ? m.longMm.toFixed(1) : '-'}</b><span><i className="sw long" />long mm</span></div>
                 <div><b>{m ? m.shortMm.toFixed(1) : '-'}</b><span><i className="sw short" />short mm</span></div>
@@ -789,6 +860,27 @@ export default function App() {
           </div>
         )}
       </section>
+
+      {match && (
+        <div className="modal" role="dialog" aria-label="Match to baseline" onKeyDown={(e) => { if (e.key === 'Escape') setMatch(null); }}>
+          <div className="modalcard">
+            <b>Match to baseline</b>
+            {match.phase === 'reading' && <p className="hint">Reading the baseline scan…</p>}
+            {match.phase === 'lung' && <p className="hint">Finding the lungs on the baseline scan ({match.pct}%). This takes about as long as the lung model on this scan.</p>}
+            {match.phase === 'choose' && (
+              <>
+                <p className="hint">{match.name}. Which tumour should be found on this scan?</p>
+                <div className="serieslist">
+                  {match.items.map((it) => <button key={it.id} className="btn" onClick={() => runMatch(it.id)}><b>{it.label}</b> {it.mm3.toLocaleString('en-US')} mm³</button>)}
+                </div>
+              </>
+            )}
+            {match.phase === 'running' && <p className="hint">Looking for the tumour on this scan… (a few seconds)</p>}
+            {match.phase === 'error' && <p className="hint">{match.message}</p>}
+            <div className="modalbtns"><button className="btn" onClick={() => { setMatch(null); if (baseLungWorker.current) baseLungWorker.current.terminate(); }}>{match.phase === 'error' ? 'Close' : 'Cancel'}</button></div>
+          </div>
+        </div>
+      )}
 
       {chooser && (
         <div className="modal" role="dialog" aria-label="Choose a series" onKeyDown={(e) => { if (e.key === 'Escape') setChooser(null); }}>
