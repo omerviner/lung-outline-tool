@@ -91,3 +91,11 @@ The time figures are modelled from Daniel's estimates, not measured on him, and 
 - The practice set has one outlined tumour per scan, and its repeat scans are minutes apart, not months, so matching is only approximated.
 - The best-of-24 overlap uses the expert outline to choose the setting, so it is an upper bound on what a user dragging by eye gets.
 - Axis numbers are approximate, not a clinical (RECIST) measurement. Research use only.
+
+## Protocol for Daniel's lab-machine trials (added 18 Nov 2026)
+Daniel is setting up a lab machine (no patient data, web access) this week. Per scan he reports his usual by-hand time for each step on the same tumours; the app's time log (CSV export) gives the tool minutes.
+- Sample: at least 5 baseline tumours and 5 follow-up pairs, on different scans for hand and tool timing (he should not learn a scan). Say the sample size in the results.
+- Per baseline tumour: tool minutes (time log: finding, outline and rows) against his by-hand minutes (finding, measuring, typing, outline if done).
+- Per follow-up: tool minutes with "Match to baseline" against his usual matching time; mark the matched place as right, moved, or re-clicked; note Confident or Uncertain; count wrong Confident proposals.
+- Quality: the tool's long axis and volume against his usual ruler measurement and freehand outline on the same tumours (mm and %), against the reference that same-day repeats differ by about 3 mm and 9.5%.
+- Report medians and ranges, and keep modelled and measured numbers in separate rows. Wait times of the lung model (30 s on WebGPU, about 3 min on a CPU, twice for matching) are not active minutes but should be noted.
