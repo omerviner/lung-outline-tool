@@ -1,6 +1,6 @@
 # Lung Outline Tool: results
 
-Research use only. Not a medical device; no clinical claims. Data: TCIA RIDER Lung CT and RIDER-LungCT-Seg (CC BY). Last updated 18 Nov 2026. Status: tool built and live; **time saved is modelled from the lab's own estimates and is not yet measured on the lab**: Daniel's timed trials are pending (see "How the time saved is measured").
+Research use only. Not a medical device; no clinical claims. Data: TCIA RIDER Lung CT and RIDER-LungCT-Seg (CC BY). Last updated 18 Nov 2026. Status: tool built and live. **Time saved is modelled from the lab's estimates, plus a first self-reported run from the lab contact (Daniel, 18 Nov, simulated): about 50% less on baseline scans and about 40% less on follow-ups. These are his stated times, not stopwatch measurements, with no sample size and no exported logs yet** (see "First reported runs").
 
 - Tool: https://omerviner.github.io/lung-outline-tool/ (runs in the browser; scans never leave the machine)
 - Source and run instructions: https://github.com/omerviner/lung-outline-tool (`npm ci && npm run dev`)
@@ -43,6 +43,7 @@ The result survives shifts up to 80 mm and rotations up to 15 degrees of the fol
 - **About 1 click in 6 leaks** (over 2x the expert volume): small nodules beside vessels, tumours against the chest wall, spine or mediastinum. The drag inward or the brush fixes it, but it costs time. 15% of held-out clicks are still below Dice 0.5.
 - **Small nodules under 2 mL are worse than the first version** (median Dice 0.73 against 0.79; one in three needs fixing). An attempted size-aware fix helped the tuning half and hurt the overall median, so it was not adopted.
 - **Hazy, ground-glass or spiculated edges** are under-outlined (the solid part, not the rim); lowering the tolerance usually recovers them.
+- **Matches often need a small drag.** Daniel reports that proposals found the right tumour in most cases but he often dragged the outline slightly for precision (self-reported, no counts).
 - **Matching is only validated on easy pairs.** The two scans of a pair are minutes apart (same session). Months-apart growth, different breathing depth and new findings are untested; the numbers say nothing about them. One Confident proposal was wrong, on a scan whose expert outline does not match the CT (treated as a data problem).
 - **No automatic finding.** Tested (lung mask plus blob finder found 32 of 59 expert tumours, weak under 2 mL and over 40 mL), declined by the lab, left out.
 - **Slice interpolation is in the app (Fill between) but lightly tested.** In the research code, drawing every 3rd slice and interpolating the rest kept Dice 0.94 against the expert outline and skipped about 63% of slice edits (slice counts, not measured times); that used perfect expert key slices. In the app it was tried once by hand (erase on two slices, fill, undo). A fill across a big gap replaces the real shape, so the key slices must be where the shape changes.
@@ -68,7 +69,16 @@ Daniel's by-hand baseline (his own estimates, 17 Nov): finding 10-20 min per sca
 
 Finding is unchanged, so about half is the ceiling; "40 to 10 minutes" is not reachable. The with-tool numbers (2.5 min to click, check and edit one tumour; 3 min to confirm a match) are assumptions, and Daniel may count typing inside measuring, which lowers the saving by a few minutes. The tool also gives a volume for every tumour, not only 1 in 5, which the model counts as extra value rather than time saved.
 
-**What replaces the model (trials, in progress):** Daniel runs the tool on a lab machine (no patient data) on his own or practice scans and reports his usual by-hand time for the same tumours. For each scan, the in-app time log gives measured active minutes (finding, outline and rows, total) and exports CSV. Per tumour and per follow-up I collect:
+**First reported runs (Daniel, 18 Nov 2026).** The lab contact is an AI-simulated persona, so these are stated times, not measured ones: no counts, no logs, no sample size.
+
+| | His usual by-hand time | With the tool (his report) | Saving | Model |
+|---|---|---|---|---|
+| Baseline scan, full outlines | 30-40 min | 15-20 min | about 50% (33-63% across the ranges) | 37 to 21 min, 43% |
+| Follow-up scan | 25+ min | about 15 min | about 40% or more | 47 to 24 min, 49% |
+
+He also reported: "Match to baseline" proposed the correct tumour in most cases (no count), but he often had to drag the outline slightly for precision; the edit trail captured his brush adjustments on spiculated edges and chest-wall contacts; volumes felt more consistent (qualitative; no agreement figure). The reported savings are in the same range as the model. Two differences to note: his by-hand follow-up time (25+ min) is well below the model's 47 min, probably because he counts a narrower task, and his baseline range comes from full outlines, which the model assumed for only 0.4 tumours per scan. Still missing: how many scans and tumours, how many matches were right versus moved, the hard cases in detail, any bugs, and the time log and edit trail CSVs.
+
+**What would replace the model (still wanted):** Daniel runs the tool on a lab machine (no patient data) on his own or practice scans and reports his usual by-hand time for the same tumours. For each scan, the in-app time log gives measured active minutes (finding, outline and rows, total) and exports CSV. Per tumour and per follow-up I collect:
 1. Minutes with the tool (time log) against his by-hand minutes for the same step.
 2. Whether the proposed outline was accepted, edited or redone (the edit trail counts the corrections and shows the volume after each; Daniel also covers the failure cases listed above, labelled with notes and saved images, so the lab meeting sees how he fixes them); whether the matched place was right, moved or re-clicked; how often a Confident proposal was wrong.
 3. Quality: the tool's long axis and volume against his usual ruler measurement and freehand outline on the same tumours (difference in mm and %), compared with the reference that same-day repeats differ by about 3 mm and 9.5%.

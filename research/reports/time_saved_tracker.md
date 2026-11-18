@@ -99,3 +99,6 @@ Daniel is setting up a lab machine (no patient data, web access) this week. Per 
 - Per follow-up: tool minutes with "Match to baseline" against his usual matching time; mark the matched place as right, moved, or re-clicked; note Confident or Uncertain; count wrong Confident proposals.
 - Quality: the tool's long axis and volume against his usual ruler measurement and freehand outline on the same tumours (mm and %), against the reference that same-day repeats differ by about 3 mm and 9.5%.
 - Report medians and ranges, and keep modelled and measured numbers in separate rows. Wait times of the lung model (30 s on WebGPU, about 3 min on a CPU, twice for matching) are not active minutes but should be noted.
+
+## First reported runs (18 Nov 2026, Daniel, simulated lab contact; stated, not measured)
+Baseline scans: 15-20 min with the tool against his usual 30-40 min (about 50% less). Follow-ups: about 15 min against 25+ (about 40% or more). Match to baseline found the correct tumour in most cases; he often dragged the outline slightly. Edit trail worked on spiculated edges and chest-wall contacts. Missing: scan and tumour counts, match counts, time log and trail CSVs, hard-case detail, bug reports. Compare: model 37 to 21 min (43%) and 47 to 24 (49%).
