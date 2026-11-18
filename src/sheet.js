@@ -1,24 +1,33 @@
 // One row per tumour, in the lab's sheet column order. Daniel only fills lobe, type, solid component,
 // match status and notes; everything else is filled from the scan and the outline.
 
+// Column names and order as in the lab's sheet (example rows from Daniel, 18 Nov 2026).
 export const COLUMNS = [
-  ['patientId', 'Patient ID'], ['date', 'Date'], ['timepoint', 'Timepoint'], ['seriesNumber', 'Series number'],
-  ['sliceThickness', 'Slice thickness (mm)'], ['noduleId', 'Nodule ID'], ['lobe', 'Lobe'], ['sliceNumber', 'Slice number'],
-  ['type', 'Type'], ['longMm', 'Long axis (mm)'], ['shortMm', 'Short axis (mm)'], ['meanMm', 'Mean diameter (mm)'],
-  ['solid', 'Solid component'], ['volumeMm3', 'Volume (mm3)'], ['matchStatus', 'Match status'],
-  ['minutes', 'Minutes on scan'], ['initials', 'Initials'], ['notes', 'Notes'],
+  ['patientId', 'Patient ID'], ['date', 'Scan date'], ['timepoint', 'Timepoint'], ['seriesNumber', 'Series'],
+  ['sliceThickness', 'Slice thickness'], ['noduleId', 'Nodule ID'], ['lobe', 'Lobe'], ['sliceNumber', 'Slice'],
+  ['type', 'Type'], ['longMm', 'Long axis'], ['shortMm', 'Short axis'], ['meanMm', 'Mean diameter'],
+  ['solid', 'Solid component'], ['volumeMm3', 'Volume'], ['matchStatus', 'Match to prior'],
+  ['minutes', 'Minutes'], ['initials', 'Initials'], ['notes', 'Notes'],
 ];
+export const UNITS = { sliceThickness: 'mm', longMm: 'mm', shortMm: 'mm', meanMm: 'mm', solid: '', volumeMm3: 'mm3' }; // shown in the table header only
 
-export const MATCH_OPTIONS = ['', 'Confident', 'Uncertain'];
+export const TIMEPOINTS = ['Baseline', 'Follow-up 1', 'Follow-up 2', 'Follow-up 3', 'Follow-up 4'];
+// Drop-down cells, with the lab's own wording
+export const OPTIONS = {
+  lobe: ['', 'Right Upper Lobe', 'Right Middle Lobe', 'Right Lower Lobe', 'Left Upper Lobe', 'Left Lower Lobe'],
+  type: ['', 'Solid', 'Part-solid', 'Ground-glass'],
+  matchStatus: ['', 'Confident', 'Uncertain'],
+};
+export const PLACEHOLDER = { lobe: 'Set lobe', type: 'Set type', matchStatus: 'Set status' };
 
 export function fmtDate(d) {
   return d && d.length === 8 ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : d || '';
 }
 
-export function makeRow({ meta, spacing, m, noduleId, timepoint, initials, minutes, includeVolume, matchStatus = '' }) {
+export function makeRow({ meta, spacing, m, noduleId, timepoint, initials, minutes, includeVolume, matchStatus = '', lobe = '', type = '' }) {
   return {
     patientId: meta.patientId || '', date: fmtDate(meta.studyDate), timepoint, seriesNumber: meta.seriesNumber ?? '',
-    sliceThickness: +spacing[0].toFixed(2), noduleId, lobe: '', sliceNumber: m.bestSlice + 1, type: '',
+    sliceThickness: +spacing[0].toFixed(2), noduleId, lobe, sliceNumber: m.bestSlice + 1, type,
     longMm: +m.longMm.toFixed(1), shortMm: +m.shortMm.toFixed(1), meanMm: +m.meanMm.toFixed(1), solid: '',
     volumeMm3: includeVolume ? Math.round(m.volumeMl * 1000) : '', matchStatus, minutes: +minutes.toFixed(1),
     initials, notes: '',
@@ -43,12 +52,12 @@ export function toCSV(rows) {
 export const COLUMN_META = {
   patientId: { group: 'Scan', w: 156 }, date: { group: 'Scan', w: 102 }, timepoint: { group: 'Scan', w: 94 },
   seriesNumber: { group: 'Scan', w: 116, num: true }, sliceThickness: { group: 'Scan', w: 130, num: true },
-  noduleId: { group: 'Nodule', w: 92, edit: true }, lobe: { group: 'Nodule', w: 92, edit: true }, sliceNumber: { group: 'Nodule', w: 108, num: true },
-  type: { group: 'Nodule', w: 112, edit: true },
+  noduleId: { group: 'Nodule', w: 92, edit: true }, lobe: { group: 'Nodule', w: 160, select: true }, sliceNumber: { group: 'Nodule', w: 108, num: true },
+  type: { group: 'Nodule', w: 124, select: true },
   longMm: { group: 'Measurements', w: 100, num: true, measured: true }, shortMm: { group: 'Measurements', w: 104, num: true, measured: true },
   meanMm: { group: 'Measurements', w: 122, num: true, measured: true }, solid: { group: 'Measurements', w: 132, edit: true },
   volumeMm3: { group: 'Measurements', w: 100, num: true, measured: true },
-  matchStatus: { group: 'Review', w: 132, select: true }, minutes: { group: 'Review', w: 130, num: true },
+  matchStatus: { group: 'Review', w: 140, select: true }, minutes: { group: 'Review', w: 130, num: true },
   initials: { group: 'Review', w: 84 }, notes: { group: 'Review', w: 260, edit: true },
 };
 

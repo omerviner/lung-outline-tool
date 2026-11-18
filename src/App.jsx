@@ -7,7 +7,7 @@ import MatchWorker from './match.worker.js?worker';
 import { parseSlice, buildVolume } from './core/dicom.js';
 import { downsample } from './core/blobs.js';
 import { measure, axesOnSlice } from './measure.js';
-import { COLUMNS, COLUMN_META, MATCH_OPTIONS, makeRow, toTSV, toCSV, groupSpans, splitLabel, fmtDate } from './sheet.js';
+import { COLUMNS, COLUMN_META, UNITS, TIMEPOINTS, OPTIONS, PLACEHOLDER, makeRow, toTSV, toCSV, groupSpans, fmtDate } from './sheet.js';
 
 const ROW_H = 34;            // table body row height
 const STRIP_BASE = 106 + 15; // first guess of the strip's fixed height (header bar, table head, scrollbar); measured once the table exists
@@ -187,7 +187,7 @@ export default function App() {
   const [over, setOver] = useState(false);
   const [rows, setRows] = useState(() => store('rows', []));
   const [initials, setInitials] = useState(() => store('initials', ''));
-  const [timepoint, setTimepoint] = useState(() => store('timepoint', 'T0'));
+  const [timepoint, setTimepoint] = useState(() => { const t = store('timepoint', 'Baseline'); return t === 'T0' ? 'Baseline' : t; });
   const [includeVolume, setIncludeVolume] = useState(true);
   const [minutes, setMinutes] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -537,7 +537,7 @@ export default function App() {
       const key = `${v.meta.patientId}|${v.meta.seriesNumber}|${v.dims.join('x')}|${v.meta.studyDate}`;
       const saved = store(`outlines:${key}`, null), items = (saved ? saved.items : []).filter((it) => it.rle && it.zr);
       if (!items.length) { setMatch({ phase: 'error', message: `No saved outline for that scan (${v.meta.patientId || 'unknown'}, series ${v.meta.seriesNumber}, ${v.meta.studyDate || 'no date'}). Open it first, outline the tumour, then come back.` }); return; }
-      baseRef.current = { v: ds.v, dims: ds.dims, sp, items: items.map((it) => ({ ...it, mm3: Math.round(rleVoxels(it.rle) * sp[0] * sp[1] * sp[2]) })), lung: null, name: `${v.meta.patientId || 'Scan'} · series ${v.meta.seriesNumber} · ${fmtDate(v.meta.studyDate)}` };
+      baseRef.current = { v: ds.v, dims: ds.dims, sp, items: items.map((it) => ({ ...it, mm3: Math.round(rleVoxels(it.rle) * sp[0] * sp[1] * sp[2]) })), lung: null, meta: { patientId: v.meta.patientId || '', date: fmtDate(v.meta.studyDate) }, name: `${v.meta.patientId || 'Scan'} · series ${v.meta.seriesNumber} · ${fmtDate(v.meta.studyDate)}` };
       setMatch({ phase: 'lung', pct: 0 });
       if (baseLungWorker.current) baseLungWorker.current.terminate();
       const lw = new LungWorker(); baseLungWorker.current = lw;
@@ -574,7 +574,13 @@ export default function App() {
       const [z, y, x] = r.seed;
       setSlice(z);
       const o = ol.current, cur = o.items.find((q) => q.id === o.active);
-      if (cur) cur.match = { level: r.confidence.level, reasons: r.confidence.reasons, from: `${it.label} on ${B.name}` };
+      if (cur) {
+        // same tumour, same name: copy the nodule ID, lobe and type from the baseline's sheet row when it is in this sheet
+        const prior = [...rows].reverse().find((q) => q.patientId === B.meta.patientId && q.date === B.meta.date && q.noduleId === it.label);
+        if (!o.items.some((q) => q !== cur && q.label === it.label)) cur.label = it.label;
+        cur.match = { level: r.confidence.level, reasons: r.confidence.reasons, from: `${it.label} on ${B.name}`, lobe: prior ? prior.lobe : '', type: prior ? prior.type : '', copied: !!(prior && (prior.lobe || prior.type)) };
+        if (timepoint === 'Baseline') setTimepoint('Follow-up 1');
+      }
       olSync();
       onOutline({ z, y: y * 2 + 1, x: x * 2 + 1, distMm: 0, start: true });
       setInfo(`Proposed from ${it.label} on the baseline: ${r.confidence.level}. Check the location, then fix with the drag or brush.`);
@@ -618,7 +624,7 @@ export default function App() {
     const cur = ol.current.items.find((x) => x.id === ol.current.active);
     clock.current.rows = [...clock.current.rows, elapsedMs()]; saveTime();
     setFlash(rows.length); setTimeout(() => setFlash(-1), 1600);
-    setRows((rs) => [...rs, makeRow({ meta: series.meta, spacing: series.spacing, m, noduleId: cur ? cur.label : 'N1', timepoint, initials, minutes: elapsedMs() / 60000, includeVolume, matchStatus: cur && cur.match ? cur.match.level : '' })]);
+    setRows((rs) => [...rs, makeRow({ meta: series.meta, spacing: series.spacing, m, noduleId: cur ? cur.label : 'N1', timepoint, initials, minutes: elapsedMs() / 60000, includeVolume, matchStatus: cur && cur.match ? cur.match.level : '', lobe: cur && cur.match ? cur.match.lobe || '' : '', type: cur && cur.match ? cur.match.type || '' : '' })]);
   };
   const edit = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const copy = async () => { await navigator.clipboard.writeText(toTSV(rows, false)); setStatus(`Copied ${rows.length} rows: paste into the sheet.`); };
@@ -814,7 +820,7 @@ export default function App() {
               </div>
               {(() => { const it = ol.current.items.find((q) => q.id === activeId); return it && it.match ? (
                 <div className={`matchnote ${it.match.level === 'Confident' ? 'ok' : 'warn'}`} title={it.match.reasons.join('; ') || 'Image match is strong and distinct'}>
-                  <b>{it.match.level}</b> match from {it.match.from}{it.match.reasons.length ? `: ${it.match.reasons.join(', ')}` : ''}. Confirm the location.
+                  <b>{it.match.level}</b> match from {it.match.from}{it.match.reasons.length ? `: ${it.match.reasons.join(', ')}` : ''}. Confirm the location.{it.match.copied ? ' Lobe and type copied from the baseline row.' : ''}
                 </div>) : null; })()}
               <div className="kv">
                 <div><b>{m ? m.longMm.toFixed(1) : '-'}</b><span><i className="sw long" />long mm</span></div>
@@ -907,7 +913,7 @@ export default function App() {
         <div className="splitter" title="Drag to resize. Double-click to fit all rows." onPointerDown={onSplitDown} onPointerMove={onSplitMove} onPointerUp={onSplitUp} onPointerCancel={onSplitUp} onDoubleClick={fitAllRows} />
         <div className="dataHead">
           <b>Sheet rows</b><span className="count">{rows.length}</span>
-          <label>Timepoint <input value={timepoint} onChange={(e) => setTimepoint(e.target.value)} /></label>
+          <label>Timepoint <input list="timepoints" value={timepoint} onChange={(e) => setTimepoint(e.target.value)} /><datalist id="timepoints">{TIMEPOINTS.map((t) => <option key={t} value={t} />)}</datalist></label>
           <label>Initials <input value={initials} onChange={(e) => setInitials(e.target.value)} /></label>
           <label title="Untick to leave the volume cell blank, as in a measured-only row"><input type="checkbox" checked={includeVolume} onChange={(e) => setIncludeVolume(e.target.checked)} /> include volume</label>
           <span className="grow" />
@@ -933,7 +939,7 @@ export default function App() {
                 <tr>
                   <th className="stick0">#</th>
                   {COLUMNS.map(([k, h], ci) => {
-                    const [name, unit] = splitLabel(h);
+                    const name = h, unit = UNITS[k];
                     return <th key={k} className={`${ci === 0 ? 'stick1' : ''} ${COLUMN_META[k].num ? 'num' : ''}`}>{name}{unit && <small>{unit}</small>}</th>;
                   })}
                   <th className="stickR" />
@@ -949,7 +955,7 @@ export default function App() {
                         <td key={k} className={`${ci === 0 ? 'stick1' : ''} ${meta.num ? 'num' : ''}`}>
                           {meta.select ? (
                             <select className="pill" data-v={r[k]} value={r[k]} onChange={(e) => edit(i, k, e.target.value)}>
-                              {MATCH_OPTIONS.map((o) => <option key={o} value={o}>{o || 'Set status'}</option>)}
+                              {OPTIONS[k].map((o) => <option key={o} value={o}>{o || PLACEHOLDER[k]}</option>)}
                             </select>
                           ) : meta.edit ? (
                             <input className="cell" placeholder="add" value={r[k]} onChange={(e) => edit(i, k, e.target.value)} />
