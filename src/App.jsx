@@ -43,7 +43,7 @@ const store = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d;
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
 const SHORTCUTS = [ // [group, [[keys, what it does], ...]]; every key is its own chip
-  ['Tools', [[['O', 'B', 'E'], 'Outline, brush, erase'], [['[', ']'], 'Brush size'], [['{', '}'], 'Brush depth (slices)'], [['Shift'], 'Hold to erase with the brush']]],
+  ['Tools', [[['O', 'B', 'E'], 'Outline, brush, erase'], [['[', ']'], 'Brush size, or tolerance with the outline tool'], [['{', '}'], 'Brush depth (slices)'], [['Shift'], 'Hold to erase with the brush']]],
   ['Edit', [[['Ctrl/Cmd+Z'], 'Undo'], [['Del'], 'Clear the outline'], [['Enter'], 'Add a row'], [['N'], 'Start another tumour']]],
   ['View', [[['W'], 'Lung or soft window'], [['P'], 'Pause or resume the timer'], [['H'], 'Hold to hide the outline'], [['M'], 'Go to the measured slice'], [['+', '-', '0'], 'Zoom in, out, fit'], [['Ctrl/Cmd+scroll'], 'Zoom (or pinch)'], [['Space+drag'], 'Pan']]],
   ['Slices', [[['scroll'], 'Change slice'], [['↑', '↓'], 'Change slice']]],
@@ -544,7 +544,7 @@ export default function App() {
 
   // ---- keyboard: ignore only real text entry, so sliders and checkboxes keep the shortcuts ----
   const act = useRef({});
-  act.current = { undo, clearAll, addRow, newOutline, togglePause, setSlice, goMeasured: () => { if (m) setSlice(m.bestSlice); } };
+  act.current = { tool, stepTol: (d) => changeTol(Math.min(0.8, Math.max(0.2, Math.round((tolRef.current + d) * 100) / 100))), undo, clearAll, addRow, newOutline, togglePause, setSlice, goMeasured: () => { if (m) setSlice(m.bestSlice); } };
   useEffect(() => {
     const onKey = (e) => {
       const t = e.target, tag = t.tagName;
@@ -571,8 +571,8 @@ export default function App() {
       else if (k === '0') viewerRef.current && viewerRef.current.fit();
       else if (k === '{') setBrushDepth((d) => Math.max(1, d - 2));
       else if (k === '}') setBrushDepth((d) => Math.min(15, d + 2));
-      else if (k === '[') setBrushMm((b) => Math.max(1, b - 1));
-      else if (k === ']') setBrushMm((b) => Math.min(15, b + 1));
+      else if (k === '[') { if (act.current.tool === 'outline') act.current.stepTol(-0.02); else setBrushMm((b) => Math.max(1, b - 1)); }
+      else if (k === ']') { if (act.current.tool === 'outline') act.current.stepTol(0.02); else setBrushMm((b) => Math.min(15, b + 1)); }
     };
     const onKeyUp = (e) => { if (e.key.toLowerCase() === 'h') setHoldHide(false); };
     window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKeyUp);
@@ -695,7 +695,7 @@ export default function App() {
                         <>
                           <div className="optlabel">Tolerance <b>{tol.toFixed(2)}</b></div>
                           <input type="range" min="0.2" max="0.8" step="0.01" value={tol} onChange={(e) => changeTol(+e.target.value)} />
-                          <div className="optends"><span>more tissue</span><span>less</span></div>
+                          <div className="optends"><span>more tissue</span><span><kbd>[</kbd> <kbd>]</kbd></span><span>less</span></div>
                         </>
                       ) : (
                         <>
