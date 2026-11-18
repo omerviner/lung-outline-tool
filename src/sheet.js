@@ -76,3 +76,29 @@ export function splitLabel(h) {
   const m = h.match(/^(.*?)\s*\((.*)\)$/);
   return m ? [m[1], m[2]] : [h, ''];
 }
+
+/**
+ * Read rows pasted from the lab's sheet (tab-separated from Excel, or comma-separated), with or without the header line.
+ * Columns are matched by header name when there is a header, otherwise by the sheet's column order. Returns { rows, skipped }.
+ */
+export function parseRows(text) {
+  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return { rows: [], skipped: 0 };
+  const split = (l) => (l.includes('\t') ? l.split('\t') : l.split(/\s*,\s*/)).map((c) => c.replace(/^"|"$/g, '').trim());
+  const norm = (h) => h.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const first = split(lines[0]);
+  const hasHeader = first.some((c) => norm(c) === 'patientid' || norm(c) === 'scandate' || norm(c) === 'timepoint');
+  let keys = COLUMNS.map(([k]) => k);
+  if (hasHeader) {
+    const byHeader = Object.fromEntries(COLUMNS.map(([k, h]) => [norm(h), k]));
+    keys = first.map((c) => byHeader[norm(c)] || null);
+  }
+  const rows = []; let skipped = 0;
+  for (const l of hasHeader ? lines.slice(1) : lines) {
+    const cells = split(l), r = Object.fromEntries(COLUMNS.map(([k]) => [k, '']));
+    cells.forEach((c, i) => { if (keys[i]) r[keys[i]] = c; });
+    if (!r.patientId || !r.noduleId) { skipped++; continue; } // not a sheet row
+    rows.push({ ...r, imported: true });
+  }
+  return { rows, skipped };
+}

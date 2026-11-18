@@ -299,3 +299,6 @@ tbody tr { scroll-snap-align: start; }
 .matchnote.ok { border-color: var(--deep); }
 .matchnote.warn { border-color: #d9884a; background: #fbeee0; }
 .modalcard .serieslist .btn { justify-content: space-between; }
+
+tr.imported td { color: var(--muted); background: #f4efe6; }
+.pastebox { width: 100%; box-sizing: border-box; font: inherit; font-size: .8rem; border: 1px solid var(--sand); border-radius: 8px; padding: 8px; background: var(--ivory); color: var(--ink); resize: vertical; }

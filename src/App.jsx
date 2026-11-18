@@ -7,7 +7,7 @@ import MatchWorker from './match.worker.js?worker';
 import { parseSlice, buildVolume } from './core/dicom.js';
 import { downsample } from './core/blobs.js';
 import { measure, axesOnSlice } from './measure.js';
-import { COLUMNS, COLUMN_META, UNITS, TIMEPOINTS, OPTIONS, PLACEHOLDER, makeRow, toTSV, toCSV, groupSpans, fmtDate } from './sheet.js';
+import { COLUMNS, COLUMN_META, UNITS, TIMEPOINTS, OPTIONS, PLACEHOLDER, makeRow, toTSV, toCSV, groupSpans, parseRows, fmtDate } from './sheet.js';
 
 const ROW_H = 34;            // table body row height
 const STRIP_BASE = 106 + 15; // first guess of the strip's fixed height (header bar, table head, scrollbar); measured once the table exists
@@ -206,6 +206,7 @@ export default function App() {
   const lungT0 = useRef(0);
   const dsRef = useRef(null), lungRef = useRef(null); // this scan's downsampled volume and lung mask, kept for matching
   const baseRef = useRef(null), baseLungWorker = useRef(null);
+  const [pasteOpen, setPasteOpen] = useState(false), [pasteText, setPasteText] = useState('');
   const [match, setMatch] = useState(null); // follow-up matching dialog: { phase: 'reading'|'lung'|'choose'|'running'|'error', ... }
   const [hidePinned, setHidePinned] = useState(false);
   const [holdHide, setHoldHide] = useState(false);
@@ -576,10 +577,14 @@ export default function App() {
       const o = ol.current, cur = o.items.find((q) => q.id === o.active);
       if (cur) {
         // same tumour, same name: copy the nodule ID, lobe and type from the baseline's sheet row when it is in this sheet
-        const prior = [...rows].reverse().find((q) => q.patientId === B.meta.patientId && q.date === B.meta.date && q.noduleId === it.label);
-        if (!o.items.some((q) => q !== cur && q.label === it.label)) cur.label = it.label;
+        const same = rows.filter((q) => q.patientId === B.meta.patientId && q.date === B.meta.date);
+        const prior = [...same].reverse().find((q) => q.noduleId === it.label) || (same.length === 1 ? same[0] : null);
+        const nodule = (prior && prior.noduleId) || it.label; // the sheet's own name for this nodule
+        o.items = o.items.filter((q) => q === cur || q.rle || q.vol || q.label !== nodule); // an empty placeholder with that name makes way
+        if (!o.items.some((q) => q !== cur && q.label === nodule)) cur.label = nodule;
         cur.match = { level: r.confidence.level, reasons: r.confidence.reasons, from: `${it.label} on ${B.name}`, lobe: prior ? prior.lobe : '', type: prior ? prior.type : '', copied: !!(prior && (prior.lobe || prior.type)) };
-        if (timepoint === 'Baseline') setTimepoint('Follow-up 1');
+        const k = prior && (/^follow-up\s*(\d+)/i.exec(prior.timepoint) || [])[1];
+        if (prior && /^baseline/i.test(prior.timepoint)) setTimepoint('Follow-up 1'); else if (k) setTimepoint(`Follow-up ${+k + 1}`); else if (timepoint === 'Baseline') setTimepoint('Follow-up 1');
       }
       olSync();
       onOutline({ z, y: y * 2 + 1, x: x * 2 + 1, distMm: 0, start: true });
@@ -627,10 +632,17 @@ export default function App() {
     setRows((rs) => [...rs, makeRow({ meta: series.meta, spacing: series.spacing, m, noduleId: cur ? cur.label : 'N1', timepoint, initials, minutes: elapsedMs() / 60000, includeVolume, matchStatus: cur && cur.match ? cur.match.level : '', lobe: cur && cur.match ? cur.match.lobe || '' : '', type: cur && cur.match ? cur.match.type || '' : '' })]);
   };
   const edit = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
-  const copy = async () => { await navigator.clipboard.writeText(toTSV(rows, false)); setStatus(`Copied ${rows.length} rows: paste into the sheet.`); };
+  const mine = rows.filter((r) => !r.imported); // rows pasted from the sheet are for matching only, not exported again
+  const copy = async () => { await navigator.clipboard.writeText(toTSV(mine, false)); setStatus(`Copied ${mine.length} rows: paste into the sheet.`); };
+  const importRows = () => {
+    const { rows: add, skipped } = parseRows(pasteText);
+    if (!add.length) { setStatus(`No sheet rows found in the pasted text${skipped ? ` (${skipped} lines skipped: Patient ID and Nodule ID are needed)` : ''}.`); return; }
+    setRows((rs) => [...rs, ...add]); setPasteOpen(false); setPasteText('');
+    setStatus(`Added ${add.length} baseline row${add.length > 1 ? 's' : ''} from your sheet${skipped ? ` (${skipped} skipped)` : ''}. They are used when matching and are not copied out again.`);
+  };
   const download = () => {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([toCSV(rows)], { type: 'text/csv' })); a.download = 'tumour_rows.csv'; a.click();
+    a.href = URL.createObjectURL(new Blob([toCSV(mine)], { type: 'text/csv' })); a.download = 'tumour_rows.csv'; a.click();
   };
 
   // ---- keyboard: ignore only real text entry, so sliders and checkboxes keep the shortcuts ----
@@ -867,6 +879,17 @@ export default function App() {
         )}
       </section>
 
+      {pasteOpen && (
+        <div className="modal" role="dialog" aria-label="Paste baseline rows" onKeyDown={(e) => { if (e.key === 'Escape') setPasteOpen(false); }}>
+          <div className="modalcard">
+            <b>Paste baseline rows</b>
+            <p className="hint">Copy the rows from your sheet (with or without the header line) and paste them here. Used for matching: the follow-up takes Nodule ID, Lobe and Type from the baseline row of the same patient, scan date and nodule. These rows are not copied out again.</p>
+            <textarea className="pastebox" autoFocus rows={6} value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder="HTL-0001, 2025-01-14, Baseline, 3, 1.25, N1, Right Upper Lobe, 142, Solid, ..." />
+            <div className="modalbtns"><button className="btn" onClick={() => setPasteOpen(false)}>Cancel</button><button className="btn primary" disabled={!pasteText.trim()} onClick={importRows}>Add rows</button></div>
+          </div>
+        </div>
+      )}
+
       {match && (
         <div className="modal" role="dialog" aria-label="Match to baseline" onKeyDown={(e) => { if (e.key === 'Escape') setMatch(null); }}>
           <div className="modalcard">
@@ -917,9 +940,10 @@ export default function App() {
           <label>Initials <input value={initials} onChange={(e) => setInitials(e.target.value)} /></label>
           <label title="Untick to leave the volume cell blank, as in a measured-only row"><input type="checkbox" checked={includeVolume} onChange={(e) => setIncludeVolume(e.target.checked)} /> include volume</label>
           <span className="grow" />
+          <button className="btn" onClick={() => setPasteOpen(true)} title="Paste rows from your sheet (for example a baseline) so a matched follow-up inherits Nodule ID, Lobe and Type"><Icon name="copy" size={15} /> <span className="lbl">Paste baseline rows</span></button>
           <button className="btn primary" disabled={!m} onClick={addRow}><Icon name="plus" size={15} /> Add row <kbd>Enter</kbd></button>
-          <button className="btn" disabled={!rows.length} onClick={copy}><Icon name="copy" size={15} /> <span className="lbl">Copy rows</span></button>
-          <button className="btn" disabled={!rows.length} onClick={download}><Icon name="download" size={15} /> <span className="lbl">CSV</span></button>
+          <button className="btn" disabled={!mine.length} onClick={copy}><Icon name="copy" size={15} /> <span className="lbl">Copy rows</span></button>
+          <button className="btn" disabled={!mine.length} onClick={download}><Icon name="download" size={15} /> <span className="lbl">CSV</span></button>
           <button className="btn ghost" disabled={!rows.length} onClick={() => setRows([])}><Icon name="trash" size={15} /> <span className="lbl">Clear</span></button>
         </div>
         <div className="tablewrap" ref={tableRef}>
@@ -947,7 +971,7 @@ export default function App() {
               </thead>
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={i} className={i === flash ? 'flash' : ''}>
+                  <tr key={i} className={`${i === flash ? 'flash' : ''} ${r.imported ? 'imported' : ''}`} title={r.imported ? 'From your sheet: used for matching, not copied out again' : undefined}>
                     <td className="stick0 idx">{i + 1}</td>
                     {COLUMNS.map(([k], ci) => {
                       const meta = COLUMN_META[k];
