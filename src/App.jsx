@@ -1048,11 +1048,11 @@ export default function App() {
           <label>Initials <input value={initials} onChange={(e) => setInitials(e.target.value)} /></label>
           <label title="Untick to leave the volume cell blank, as in a measured-only row"><input type="checkbox" checked={includeVolume} onChange={(e) => setIncludeVolume(e.target.checked)} /> include volume</label>
           <span className="grow" />
-          <button className="btn" onClick={() => setPasteOpen(true)} title="Paste rows from your sheet (for example a baseline) so a matched follow-up inherits Nodule ID, Lobe and Type"><Icon name="copy" size={15} /> <span className="lbl">Paste baseline rows</span></button>
+          <button className="btn" onClick={() => setPasteOpen(true)} aria-label="Paste baseline rows" title="Paste rows from your sheet (for example a baseline) so a matched follow-up inherits Nodule ID, Lobe and Type"><Icon name="copy" size={15} /> <span className="lbl">Paste baseline rows</span></button>
           <button className="btn primary" disabled={!m} onClick={addRow}><Icon name="plus" size={15} /> Add row <kbd>Enter</kbd></button>
-          <button className="btn" disabled={!mine.length} onClick={copy}><Icon name="copy" size={15} /> <span className="lbl">Copy rows</span></button>
-          <button className="btn" disabled={!mine.length} onClick={download}><Icon name="download" size={15} /> <span className="lbl">CSV</span></button>
-          <button className="btn ghost" disabled={!rows.length} onClick={() => setRows([])}><Icon name="trash" size={15} /> <span className="lbl">Clear</span></button>
+          <button className="btn" disabled={!mine.length} onClick={copy} aria-label="Copy rows" title="Copy rows: paste into the sheet"><Icon name="copy" size={15} /> <span className="lbl">Copy rows</span></button>
+          <button className="btn" disabled={!mine.length} onClick={download} aria-label="Download CSV" title="Download the rows as CSV"><Icon name="download" size={15} /> <span className="lbl">CSV</span></button>
+          <button className="btn ghost" disabled={!rows.length} onClick={() => setRows([])} aria-label="Clear all rows" title="Clear all rows"><Icon name="trash" size={15} /> <span className="lbl">Clear</span></button>
         </div>
         <div className="tablewrap" ref={tableRef}>
           {rows.length ? (
