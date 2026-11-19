@@ -78,7 +78,7 @@ function LungChip({ s }) {
   if (s.phase === 'idle') return null;
   const pct = s.total ? Math.round((100 * s.done) / s.total) : 0;
   const eta = s.phase === 'running' && s.eta > 3 ? ` · about ${s.eta >= 90 ? `${Math.round(s.eta / 60)} min` : `${Math.round(s.eta)} s`} left` : '';
-  const text = s.phase === 'loading' || s.phase === 'running' ? `Lung model ${pct}%${eta}`
+  const text = s.phase === 'loading' || s.phase === 'running' ? `Lung model ${pct}%`
     : s.phase === 'preparing' ? 'Preparing lung model'
     : s.phase === 'ready' ? 'Lung limit on'
     : 'Lung model failed';
@@ -88,7 +88,7 @@ function LungChip({ s }) {
   return (
     <span className={`lungchip ${s.phase}`} title={title}>
       {(s.phase === 'loading' || s.phase === 'running') && <i className="bar"><i style={{ width: `${pct}%` }} /></i>}
-      {text}
+      {text}{(s.phase === 'loading' || s.phase === 'running') && eta && <span className="eta">{eta}</span>}
     </span>
   );
 }

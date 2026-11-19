@@ -193,13 +193,13 @@ tbody tr { scroll-snap-align: start; }
 /* header: logo block, product block, then the status chips and actions; it shrinks gracefully */
 .brandblock { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 0 1 auto; }
 .brandblock > div { display: grid; line-height: 1.15; min-width: 0; }
-.brandblock b { font-size: .92rem; white-space: nowrap; color: var(--deep); }
+.brandblock b { font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--deep); }
 .brandblock.product b { color: var(--ink); }
 .brandblock span { font-size: .68rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .divider { width: 1px; height: 24px; background: var(--line); flex: none; }
 .topbar .grow { flex: 1 1 0; min-width: 8px; }
 .topbar .btn, .topbar .chip, .lungchip { flex: none; }
-@media (max-width: 1180px) { .brandblock span { display: none; } }
+@media (max-width: 1180px) { .brandblock span, .lungchip .eta { display: none; } }
 @media (max-width: 940px) { .brandblock.product, .divider { display: none; } }
 @media (max-width: 760px) { .brandblock > div { display: none; } .timer { display: none; } }
 
