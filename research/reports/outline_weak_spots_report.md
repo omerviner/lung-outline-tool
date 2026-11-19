@@ -1,6 +1,6 @@
 # Task B: outline weak spots (v3 variant, interpolation)
 
-18 Nov 2026. Research use only, no clinical claims. Same data and split as `notes/opus_report.md`: 295 clicks, 59 scans, 31 patients, split by patient (`longmarker-tool/work/out/split.json`), settings chosen on the tuning half (16 patients, 150 clicks), numbers below from the held-out half (15 patients, 145 clicks) unless marked. Nothing committed; `app/`, plan, tracker, gap review untouched.
+18 Nov 2026. Research use only, no clinical claims. Same data and split as `outline_v2_report.md`: 295 clicks, 59 scans, 31 patients, split by patient (`longmarker-tool/work/out/split.json`), settings chosen on the tuning half (16 patients, 150 clicks), numbers below from the held-out half (15 patients, 145 clicks) unless marked. Nothing committed; `app/`, plan, tracker, gap review untouched.
 
 ## Summary
 
@@ -62,7 +62,7 @@ What got worse: 10-40 mL tumours under v3 (median Dice down 0.04, under-growth u
 
 ## Verification
 
-- v3 with default options reproduces v2 exactly on the sweep: held-out 0.742 / 63% / 85% / 16% leak, tuning 0.772, identical to `notes/opus_report.md`.
+- v3 with default options reproduces v2 exactly on the sweep: held-out 0.742 / 63% / 85% / 16% leak, tuning 0.772, identical to `outline_v2_report.md`.
 - The Dice values come from `eval_v2.mjs` (same scorer as v2). I did not rerun the independent Python scorer on v3; the interpolation Dice uses the same simple overlap formula. Nothing was checked on real follow-ups.
 
 ## Syncing into the app

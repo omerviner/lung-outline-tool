@@ -1,5 +1,7 @@
 # Time saved tracker: click-to-outline tool
 
+> Working document. Current figures and the final framing are in `docs/RESULTS.md`; this file keeps the time model, the measuring method and the trial protocol.
+
 Last updated 17 Nov 2026 (time log added to the app). Research use only.
 
 ## Purpose
@@ -51,7 +53,7 @@ What the log cannot show: the first minutes include anything done before the cli
 
 ## Trial log
 
-Three practice scans of different size, each timed by hand and with the tool. Manual means 3D Slicer with a ruler and freehand outline (see `review/MANUAL_REVIEW_GUIDE.md`). Fill the empty cells in minutes; finding is the same in both, so time it once if you prefer.
+Template, not filled in (the lab contact's stated runs, further down, took its place). Three practice scans of different size, each timed by hand and with the tool. Manual means 3D Slicer with a ruler and freehand outline (see `review/MANUAL_REVIEW_GUIDE.md`). Fill the empty cells in minutes; finding is the same in both, so time it once if you prefer.
 
 | Scan | Tumour | Method | Finding (min) | Measure and outline (min) | Row entry (min) | Matching (min) | Total (min) | Dice vs expert | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -66,7 +68,7 @@ Three practice scans of different size, each timed by hand and with the tool. Ma
 
 ## Results so far
 
-No timed trials yet, so time saved is the model above (43% per baseline scan, 49% per follow-up). Outline quality has been scored on all 59 practice scans with simulated clicks (5 per scan, 295 clicks) against the expert outlines (`review/click_sweep_results.csv`).
+No stopwatch-timed trials yet, so time saved is the model above (43% per baseline scan, 49% per follow-up); the lab contact's stated runs (below) are in the same range. Outline quality has been scored on all 59 practice scans with simulated clicks (5 per scan, 295 clicks) against the expert outlines (`review/click_sweep_results.csv`).
 
 | Measure | Value | Status |
 | --- | --- | --- |

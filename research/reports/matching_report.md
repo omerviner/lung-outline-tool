@@ -6,7 +6,7 @@
 
 - `proposeMatch(baseline, follow)` in `longmarker-tool/core/src/match.js` proposes a seed on the follow-up scan; `outlineFromClick` then grows the outline from it, so it is editable like any click outline. Plain JavaScript, no new dependencies, about 1.7 s per match in Node.
 - **Held-out (14 patients, 28 pair-directions, minutes-apart scans): the proposed seed lands inside the expert outline in 28/28 (100%), median centre error 1.5 mm, median Dice of the resulting outline 0.77 (68% reach 0.7).** Same-slice-index copy: 43% hit, median Dice 0.28. Same patient-space position (DICOM geometry): 29% hit, Dice 0.00. So the baselines are beaten by a wide margin.
-- **The matching is no longer the limit; the outlining is.** Growing the outline from the *expert's own centre* gives the same held-out median Dice (0.77). Where the proposal is wrong in Dice terms, it is the click-outline failures from `opus_report.md` (small nodules, leaks), not a wrong place.
+- **The matching is no longer the limit; the outlining is.** Growing the outline from the *expert's own centre* gives the same held-out median Dice (0.77). Where the proposal is wrong in Dice terms, it is the click-outline failures from `outline_v2_report.md` (small nodules, leaks), not a wrong place.
 - **This is an easy test.** The two scans of a pair are minutes apart, same session, same breath-hold protocol, no growth. It shows that the machinery finds the right place when the anatomy is the same. It says nothing about months-apart growth, treatment response, or different positioning. Do not read 100% as a claim about real follow-ups.
 
 ## Method
@@ -42,7 +42,7 @@ Tuning half, for reference (it chose the confidence thresholds): proposal hit 96
 
 Notes: geometry alone is *worse* than slice index here, so the DICOM positions are not a shared patient frame in this dataset (centres 23 mm apart, origins differ by tens of mm). Plain copy of the baseline outline into the follow-up gives Dice 0.11 median.
 
-By target size (all 56 rows): under 2 mL 12/12 hits, Dice 0.63; 2-10 mL 18/18, 0.77; over 10 mL 25/26, 0.85. Small nodules are hit but outlined worse, as in `opus_report.md`.
+By target size (all 56 rows): under 2 mL 12/12 hits, Dice 0.63; 2-10 mL 18/18, 0.77; over 10 mL 25/26, 0.85. Small nodules are hit but outlined worse, as in `outline_v2_report.md`.
 
 **Confidence, held-out, unperturbed pairs:** 26 of 28 proposals are "Confident" (100% hit, median Dice 0.80), 2 "Uncertain" (also hits, Dice 0.69). On the tuning half the rule marks 14 of 28 "Uncertain" although all 14 of those are hits, so it is conservative; Daniel would be asked to look at about a quarter to a half of the proposals that are in fact right. Across all perturbation runs pooled, the held-out "Confident" set (67% coverage) hit 100%; the "Uncertain" set hit 62% (the tuning half: 93% and 85%, so the rule is looser there; the held-out numbers are the better-behaved half and I would not promise 100% elsewhere).
 
@@ -75,7 +75,7 @@ What this does and does not show:
 
 ## Failures (the proposal stage, all 56 rows)
 
-Hit but a poor outline (Dice < 0.3, seed 0.8-1.8 mm from the expert centre): RIDER-2073083717 both directions (5-6 mL), RIDER-9763310455 both directions (0.9 mL). These are outline failures on small or ill-defined nodules (the same weakness as in `opus_report.md`), not matching failures. The confidence rule marks all four "Uncertain" ("ambiguous: second look-alike place", margin 0.18-0.28), which is a useful flag even though the reason is partly the nodule itself.
+Hit but a poor outline (Dice < 0.3, seed 0.8-1.8 mm from the expert centre): RIDER-2073083717 both directions (5-6 mL), RIDER-9763310455 both directions (0.9 mL). These are outline failures on small or ill-defined nodules (the same weakness as in `outline_v2_report.md`), not matching failures. The confidence rule marks all four "Uncertain" ("ambiguous: second look-alike place", margin 0.18-0.28), which is a useful flag even though the reason is partly the nodule itself.
 
 One miss: **RIDER-2669524182, RETEST to TEST (22 mL), seed 1.4 mm from the expert centre but outside the outline, empty outline, flagged "Confident"** (NCC 0.89, margin 0.48). This is the scan the earlier notes already flag (the expert outline does not match the CT; seed about -800 HU inside it). I treat it as a data problem, not a method failure, but it is a confident wrong answer in the table and counted as a miss everywhere above.
 

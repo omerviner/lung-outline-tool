@@ -105,7 +105,7 @@ Overlays of four held-out failures are in `review/click_v2_failures.png` (green:
 
 - **The app does not get the full gain yet.** `app/src/outline.worker.js` passes an all-ones lung mask, so v2 runs without a lung limit there (held-out 0.68 instead of 0.74). The app needs the LungMask output, and `app/src/core/clickoutline.js` must be re-synced (`app/scripts/sync-core.sh`). The worker also echoes `m.opts.radiusMm` back to the page; with v2 it should return `r.radiusMm`, the automatic radius, so the drag starts from it. I did not change the app.
 - **Pre-existing data issue.** `review/click_sweep_results.csv` has 3 places where two rows were merged on one line: parts were concatenated without a trailing newline, so 7,077 lines instead of 7,080 rows. The file is left as is; `report_v2.py` repairs it on read. The 0.76 / 63% / 88% ceiling in the handoff therefore dropped 3 rows; the recomputed all-59 ceiling barely moves.
-- **Time tracker.** I did not edit `notes/time_saved_tracker.md`. If you update it, the measured line becomes: held-out median Dice 0.74, 63% ≥0.7, 85% ≥0.5, 0% empty.
+- **Time tracker.** I did not edit `time_saved_tracker.md`. If you update it, the measured line becomes: held-out median Dice 0.74, 63% ≥0.7, 85% ≥0.5, 0% empty.
 
 ## Files
 
