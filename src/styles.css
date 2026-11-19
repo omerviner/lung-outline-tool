@@ -83,6 +83,7 @@ kbd { font: inherit; font-size: .7rem; color: var(--ink); background: var(--ivor
 .dataHead label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .8rem; }
 .dataHead input[type=checkbox] { accent-color: var(--deep); }
 .dataHead input[type=text], .dataHead input:not([type]) { width: 64px; height: 30px; border: 1px solid var(--sand); border-radius: 8px; background: var(--ivory); padding: 0 8px; color: var(--ink); }
+.dataHead input[list] { width: 108px; }
 .btn kbd { margin-left: 4px; background: rgba(253,253,249,.18); border-color: rgba(253,253,249,.3); color: inherit; }
 
 .dataHead .count { background: var(--deep); color: var(--ivory); border-radius: 999px; padding: 1px 9px; font-size: .75rem; font-weight: 600; }
