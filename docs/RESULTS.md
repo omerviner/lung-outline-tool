@@ -90,6 +90,9 @@ How to read it: the savings are in the same range as the model. His by-hand foll
 3. Quality: the tool's long axis and volume against his usual ruler measurement and freehand outline on the same tumours (difference in mm and %), compared with the reference that same-day repeats differ by about 3 mm and 9.5%.
 Report medians and ranges, not only means; use different scans for the by-hand and tool timings so he does not learn a scan; say how many tumours the sample holds. Until then every time-saved figure above is labelled "modelled".
 
+## Code and design review
+Before submission the app got a separate code and design review (`research/reports/opus_review_report.md`): about 20 fixes, each its own commit. Examples: a stale worker result could silently drop the next click; a failed worker or bad folder left the page waiting; shortcuts fired behind open dialogs; matched outlines lost their match note after a reload; the pasted-rows date match missed common date formats; tables and the header clipped text at narrow widths; focus rings and button names for keyboard and screen-reader use. Known and left: the undo history holds up to six full copies of the mask (memory on large scans), CSV cells starting with "=" are not escaped, and the Fill-between slice list is not rolled back by undo. Not tested: the CPU path after the fixes, thick-slice and corrupt folders, storage quota, and Paste baseline rows end to end.
+
 ## Limits of this evaluation
 - The lab contacts are AI-simulated. The baseline timings are what they said, not a stopwatch.
 - The practice set has one outlined tumour per scan, and the expert outlines are the only truth available; simulated clicks stand in for a person.
