@@ -840,7 +840,7 @@ export default function App() {
         {series && <FolderPicker onFiles={(f) => loadFiles(f, true)} label="Match to baseline" />}
         {series && <FolderPicker onFiles={loadFiles} label="Open folder" />}
         {trailOpen && <TrailPanel events={trailRef.current} scanLabel={ol.current.label || 'This scan'} onNote={(t) => { logEdit('note', t); }} onClear={() => { trailRef.current = []; trailSave(); setTrailN((n) => n + 1); }} />}
-        {timeOpen && <TimePanel log={timeLog} nowKey={ol.current.key} liveMin={minutes} rows={rows} onClear={() => { setTimeLog({}); save('timelog', {}); }} />}
+        {timeOpen && <TimePanel log={timeLog} nowKey={ol.current.key} liveMin={minutes} onClear={() => { setTimeLog({}); save('timelog', {}); }} />}
         {helpOpen && (
           <div className="help" role="dialog" aria-label="Keyboard shortcuts">
             <b>Keyboard shortcuts</b>
