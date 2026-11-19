@@ -207,7 +207,7 @@ export default function App() {
   const [lungState, setLungState] = useState({ phase: 'idle' });
   const lungT0 = useRef(0);
   const dsRef = useRef(null), lungRef = useRef(null); // this scan's downsampled volume and lung mask, kept for matching
-  const baseRef = useRef(null), baseLungWorker = useRef(null);
+  const baseRef = useRef(null), baseLungWorker = useRef(null), matchWorker = useRef(null), matchTok = useRef(0);
   const keysRef = useRef(new Set()), [keyN, setKeyN] = useState(0); // slices edited with the brush: the key slices for interpolation
   const [pasteOpen, setPasteOpen] = useState(false), [pasteText, setPasteText] = useState('');
   const [match, setMatch] = useState(null); // follow-up matching dialog: { phase: 'reading'|'lung'|'choose'|'running'|'error', ... }
@@ -552,6 +552,7 @@ export default function App() {
     const id = ++lungId.current, lw = new LungWorker();
     lungWorkerRef.current = lw;
     setLungState({ phase: 'loading', done: 0, total: 1 });
+    lw.onerror = () => { if (id === lungId.current) setLungState({ phase: 'error', message: 'The lung model worker could not start.' }); };
     lw.onmessage = (ev) => {
       const r = ev.data;
       if (r.id !== lungId.current) return; // a newer scan replaced this one
@@ -598,10 +599,12 @@ export default function App() {
   // ---- follow-up matching: load the baseline scan, find the tumour on this scan ----
   const openBaseline = async (bytes) => {
     if (!seriesRef.current) return;
+    const tok = ++matchTok.current; // Cancel while this runs bumps the token, and the steps below stop
     setMatch({ phase: 'reading' });
     await new Promise((r) => setTimeout(r, 20));
     try {
       const v = buildVolume(bytes), ds = downsample(v.vol, v.dims), sp = [v.spacing[0], v.spacing[1] * 2, v.spacing[2] * 2];
+      if (tok !== matchTok.current) return;
       const key = `${v.meta.patientId}|${v.meta.seriesNumber}|${v.dims.join('x')}|${v.meta.studyDate}`;
       const saved = store(`outlines:${key}`, null), items = (saved ? saved.items : []).filter((it) => it.rle && it.zr);
       if (!items.length) { setMatch({ phase: 'error', message: `No saved outline for that scan (${v.meta.patientId || 'unknown'}, series ${v.meta.seriesNumber}, ${v.meta.studyDate || 'no date'}). Open it first, outline the tumour, then come back.` }); return; }
@@ -609,6 +612,7 @@ export default function App() {
       setMatch({ phase: 'lung', pct: 0 });
       if (baseLungWorker.current) baseLungWorker.current.terminate();
       const lw = new LungWorker(); baseLungWorker.current = lw;
+      lw.onerror = () => { lw.terminate(); setMatch({ phase: 'error', message: 'The lung model could not be started on the baseline scan.' }); };
       lw.onmessage = (ev) => {
         const r = ev.data;
         if (r.type === 'progress') setMatch((o) => (o && o.phase === 'lung' ? { phase: 'lung', pct: r.total ? Math.round((100 * r.done) / r.total) : 0 } : o));
@@ -618,6 +622,12 @@ export default function App() {
       const copy = new Int16Array(v.vol);
       lw.postMessage({ type: 'run', id: 1, vol: copy.buffer, dims: v.dims }, [copy.buffer]);
     } catch (err) { setMatch({ phase: 'error', message: `Could not read that folder as a scan: ${(err && err.message) || err}` }); }
+  };
+  const cancelMatch = () => { // close the dialog, stop the baseline lung model, let go of the baseline volume
+    matchTok.current++; setMatch(null);
+    if (baseLungWorker.current) { baseLungWorker.current.terminate(); baseLungWorker.current = null; }
+    if (matchWorker.current) { matchWorker.current.terminate(); matchWorker.current = null; }
+    baseRef.current = null;
   };
   const runMatch = (itemId) => {
     const B = baseRef.current, F = dsRef.current, fl = lungRef.current;
@@ -633,11 +643,12 @@ export default function App() {
       if (d < best) { best = d; seed = [z, y, x]; }
     }
     setMatch({ phase: 'running', name: B.name });
-    const w = new MatchWorker();
+    const w = new MatchWorker(); matchWorker.current = w;
+    w.onerror = () => { w.terminate(); setMatch({ phase: 'error', message: 'Matching failed: the matching worker stopped.' }); };
     w.onmessage = (ev) => {
-      const r = ev.data; w.terminate();
+      const r = ev.data; w.terminate(); matchWorker.current = null;
       if (r.type === 'error') { setMatch({ phase: 'error', message: `Matching failed: ${r.message}` }); return; }
-      setMatch(null);
+      baseRef.current = null; setMatch(null);
       newOutline(); // the proposal becomes a new tumour, outlined from the proposed point like a click
       const [z, y, x] = r.seed;
       setSlice(z);
@@ -731,10 +742,11 @@ export default function App() {
 
   // ---- keyboard: ignore only real text entry, so sliders and checkboxes keep the shortcuts ----
   const act = useRef({});
-  act.current = { tool, fillBetween, stepTol: (d) => changeTol(Math.min(0.8, Math.max(0.2, Math.round((tolRef.current + d) * 100) / 100))), undo, clearAll, addRow, newOutline, togglePause, setSlice, goMeasured: () => { if (m) setSlice(m.bestSlice); } };
+  act.current = { modal: pasteOpen || !!match || !!chooser, closeModal: () => { setPasteOpen(false); setChooser(null); cancelMatch(); }, tool, fillBetween, stepTol: (d) => changeTol(Math.min(0.8, Math.max(0.2, Math.round((tolRef.current + d) * 100) / 100))), undo, clearAll, addRow, newOutline, togglePause, setSlice, goMeasured: () => { if (m) setSlice(m.bestSlice); } };
   useEffect(() => {
     const onKey = (e) => {
       const t = e.target, tag = t.tagName;
+      if (act.current.modal) { if (e.key === 'Escape') act.current.closeModal(); return; } // a dialog is open: its own buttons and fields get the keys
       const typing = tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && !['range', 'checkbox', 'file', 'button'].includes(t.type));
       if (typing) return;
       const k = e.key.toLowerCase();
@@ -980,7 +992,7 @@ export default function App() {
       )}
 
       {match && (
-        <div className="modal" role="dialog" aria-label="Match to baseline" onKeyDown={(e) => { if (e.key === 'Escape') setMatch(null); }}>
+        <div className="modal" role="dialog" aria-label="Match to baseline" >
           <div className="modalcard">
             <b>Match to baseline</b>
             {match.phase === 'reading' && <p className="hint">Reading the baseline scan…</p>}
@@ -995,7 +1007,7 @@ export default function App() {
             )}
             {match.phase === 'running' && <p className="hint">Looking for the tumour on this scan… (a few seconds)</p>}
             {match.phase === 'error' && <p className="hint">{match.message}</p>}
-            <div className="modalbtns"><button className="btn" onClick={() => { setMatch(null); if (baseLungWorker.current) baseLungWorker.current.terminate(); }}>{match.phase === 'error' ? 'Close' : 'Cancel'}</button></div>
+            <div className="modalbtns"><button className="btn" onClick={cancelMatch}>{match.phase === 'error' ? 'Close' : 'Cancel'}</button></div>
           </div>
         </div>
       )}
