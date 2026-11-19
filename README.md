@@ -1,65 +1,68 @@
 # Lung Outline Tool
 
-**Lung Outline Tool** is a prototype built for a simulated thoracic oncology research lab to cut the manual time spent finding, outlining and measuring lung tumours on CT. You click a tumour, drag to set its size, brush to fix hazy edges, and read volume and long/short axis live. A lung-segmentation model (LungMask R231 via ONNX Runtime Web) keeps outlines inside the lung. Several tumours per scan, a timer and time log, and a one-click row for the lab's sheet are included.
+Click a tumour on a lung CT and get an editable 3D outline with live volume and diameters, plus a row for the lab's Excel sheet. Everything runs in the browser, so scans never leave the machine.
 
-Scans are read in the browser and never uploaded. Research use only; not a medical device, and no clinical claims.
+**Live:** https://omerviner.github.io/lung-outline-tool/ (Chrome or Edge recommended)
 
-**Results:** [docs/RESULTS.md](docs/RESULTS.md) (what works, what fails, how the time saved is measured). Method, scores and scripts: [research/](research/README.md).
+Built as a prototype for a simulated thoracic oncology research lab, to cut the manual time spent outlining and measuring lung tumours. **Research use only. Not a medical device; no clinical claims.**
 
-Data for testing: TCIA RIDER Lung CT and RIDER-LungCT-Seg (CC BY). Model: LungMask, Apache-2.0. See `NOTICE.md`.
+- **Results:** [docs/RESULTS.md](docs/RESULTS.md): what works, what fails, and how the time saved is measured (modelled, plus the lab contact's stated runs; not stopwatch measurements).
+- **Method, scores and scripts:** [research/](research/README.md).
+
+## What it does
+- **Click-to-outline:** click a tumour; the outline, volume (mm³) and long, short and mean diameter appear at once. Drag outward or inward to resize; a tolerance slider handles hazy edges.
+- **Brush and eraser:** fix edges on one slice or through several; **Fill between** interpolates the slices between the ones you edited.
+- **Several tumours per scan,** saved in the browser, with the others shown faintly.
+- **Sheet row:** one row per tumour in the lab's 18 columns and wording; copy into Excel or download CSV.
+- **Follow-up matching:** propose the tumour on a later scan from a baseline, with Paste baseline rows to carry over nodule ID, lobe and type.
+- **Edit trail and time log:** every correction with the volume after it, and active minutes per scan, both exportable.
+- **Lung model in the browser** (LungMask R231 via ONNX Runtime Web) keeps outlines inside the lung.
+
+## Quick start
+1. Open the live link, or run locally (below).
+2. Click **Open scan folder** and choose a folder of DICOM files for one CT scan. Nothing is uploaded.
+3. Click a tumour. Press **Enter** to add its row.
+
+Practice scans are public: TCIA "RIDER Lung CT" (doi 10.7937/k9/tcia.2015.u1x8a5nr) and the expert outlines "RIDER-LungCT-Seg" (doi 10.7937/tcia.2020.jit9grk8), downloaded with the TCIA Data Retriever (CC BY, attribute). No scans are stored in this repository.
 
 ## Using it
-- **Open scan folder**, or drop a folder on the canvas. If the folder holds several series you pick one; slices thicker than 1.3 mm show a warning.
-- **Outline:** click a tumour. Drag outward or inward to set the radius; the tolerance slider is in the right panel (`,` and `.` step it), and the scan's other tumours show as faint outlines. The numbers (volume, long and short axis) update live, and the axes are drawn on the slice where the outline is largest (`M` jumps there).
-- **Brush and erase:** paint on the current slice, or through several slices with the depth slider. `Shift` erases while brushing; `Ctrl/Cmd+Z` undoes.
-- **View:** wheel for slices, `Ctrl/Cmd+wheel` or pinch to zoom, `Space+drag` to pan, hold `H` to hide the outline. The `?` button lists every shortcut.
-- **Several tumours:** `N` saves the outline and starts another. The panel at the top right lists them with volumes; click one to reopen and edit it. Outlines are saved in the browser per scan (open the same folder again to get them back). The row's nodule ID comes from the outline label.
-- **Window:** `W` switches Lung and Soft; the sliders button sets level and width by hand.
-- **Time:** the header timer counts active minutes on the scan (`P` pauses). Click it for the time log: per scan, finding, outline and rows, total, and the by-hand model, with a CSV download.
-- **Rows:** `Enter` adds a row in the lab's 18-column order; **Copy rows** pastes into Excel, **CSV** downloads. Lobe, type, solid component, match status, nodule ID and notes are editable in the table.
+- **Scan:** if the folder holds several series you pick one; slices thicker than 1.3 mm show a warning. Wheel or arrow keys change slice; `Ctrl/Cmd+wheel` or pinch zooms; `Space+drag` pans; hold `H` to hide the outline; `W` switches Lung and Soft window, and the sliders button sets level and width. The `?` button lists every shortcut.
+- **Outline:** click a tumour, drag to set the radius. The tolerance slider is in the right panel (`,` and `.` step it). Axes are drawn on the slice where the outline is largest (`M` jumps there).
+- **Brush and erase:** paint on the current slice, or through several with the depth slider; `[` `]` change brush size; `Shift` erases while brushing; `Ctrl/Cmd+Z` undoes. **Fill between** (`F`): fix a few slices, then fill the slices between the first and last edited one by shape interpolation. It replaces what is between, so edit the slices where the shape changes; Undo reverts it.
+- **Several tumours:** `N` saves the outline and starts another; the right panel lists them with volumes; click one to reopen it. The row's nodule ID comes from the outline label.
+- **Rows:** `Enter` adds a row; **Copy rows** pastes into Excel (tab-separated), **CSV** downloads. Lobe, type, solid component, match status, nodule ID and notes are editable in the table. Volume is in mm³, dates YYYY-MM-DD, slice numbers from 1.
+- **Time:** the header timer counts active minutes on the scan (`P` pauses). Click it for the time log (finding, outline and rows, total, and the by-hand model), with CSV download.
 
-## Try it with practice data
-The practice scans are public: TCIA "RIDER Lung CT" (doi 10.7937/k9/tcia.2015.u1x8a5nr) and the expert outlines "RIDER-LungCT-Seg" (doi 10.7937/tcia.2020.jit9grk8), downloaded with the TCIA Data Retriever (CC BY, attribute). Each scan is a folder of DICOM files; choose one such folder with **Open scan folder**. Nothing is uploaded.
+### Edit trail
+The list button in the header opens the trail of the open scan: every click, drag resize, tolerance change, brush add or erase, undo, clear, match proposal, saved image and row, in order, with the active time and the volume after each step. A summary per tumour shows the counts and how a matched proposal was handled (accepted as proposed, or edited). Add a note to label an edge case; the camera button saves the slice with its outline as a PNG. Kept in the browser per scan; exports to CSV.
+
+### Follow-up matching
+With a follow-up scan open, **Match to baseline** (header) asks for the baseline scan's folder (it needs the outline you saved there in this browser), runs the lung model on it, and proposes where the same tumour is on the open scan (lung registration, then a local image match). The proposal appears as a new tumour flagged **Confident** or **Uncertain**, also in the row's Match status; check the place and fix it with the drag or brush. On same-day test-retest pairs the proposed point hit the expert outline 28 of 28 times (see [research/reports/opus_match_report.md](research/reports/opus_match_report.md)); months-apart scans are untested.
+
+**Paste baseline rows** (sheet header): paste rows copied from your sheet (tab- or comma-separated, header optional). They show greyed, are used for matching (the follow-up takes nodule ID, lobe and type from the baseline row of the same patient, scan date and nodule, and the timepoint moves to the next Follow-up), and are not included in Copy rows or CSV.
 
 ## Run locally
 Needs Node 18 or newer.
 ```bash
 npm install
 npm run dev        # http://localhost:5173
+npm run build      # static site in dist/
 ```
 
-## Build and deploy (free static hosting)
-```bash
-npm run build      # output in dist/
-```
-Deploy `dist/` to any static host (about 133 MB: the lung model 111 MB and the ONNX Runtime file 21 MB). Free hosts limit single files (Cloudflare Pages: 25 MiB), so the lung model is stored in 6 chunks of 20 MiB in `public/model/` and joined in the browser; the largest other file is the 20.7 MiB runtime. No special server headers are needed.
+## Deploy
+The site is static (scans are read in the browser). For GitHub Pages: push to a repository whose default branch is `main` and set Settings > Pages > "GitHub Actions"; `.github/workflows/pages.yml` builds with `BASE=/<repo>/` and publishes `dist`. Any other static host works too: deploy `dist/` (about 133 MB: the lung model 111 MB and the ONNX Runtime file 21 MB). Free hosts limit single files (Cloudflare Pages: 25 MiB), so the model is stored in 6 chunks of 20 MiB in `public/model/` and joined in the browser. No special server headers are needed.
 
 ## Lung model
-After a scan loads, the LungMask model (ONNX, `public/model/`) runs in a background worker and gives the outline its lung limit. Outlines work straight away without it, with lower accuracy (the status line says "without lung limit"), and are upgraded automatically when the model finishes.
+After a scan loads, the LungMask model (ONNX, `public/model/`) runs in a background worker and gives the outline its lung limit. Outlines work straight away without it, with lower accuracy (the status says "without lung limit"), and are upgraded automatically when it finishes.
 - **WebGPU** (recent Chrome or Edge): about 30 s per scan.
-- **No WebGPU:** falls back to single-threaded CPU on every third slice: about 3 minutes per 236-slice scan (twice when matching to a baseline). Multi-threaded WebAssembly is not used: initialising it inside a worker hangs.
+- **No WebGPU:** single-threaded CPU on every third slice, about 3 minutes per 236-slice scan (twice when matching to a baseline). Multi-threaded WebAssembly is not used: initialising it inside a worker hangs.
 - `?ep=wasm` or `?ep=webgpu` in the address forces one backend (for testing).
 
-## Layout
-- `src/core/`: image-processing modules (DICOM reader, lung mask, click-to-outline), plain JavaScript. Synced from the research folder with `npm run sync-core`; do not edit by hand.
-- `public/model/`: LungMask R231 network (ONNX) in chunks. Rebuild with `npm run split-model -- <r231.onnx>`.
+## Repository layout
+- `src/`: the React app. `src/core/`: image-processing modules (DICOM reader, lung mask, click-to-outline, matching, interpolation), plain JavaScript, synced from the research folder with `npm run sync-core`; do not edit by hand. `src/*.worker.js`: the outline, lung model and matching workers.
+- `public/model/`: the LungMask R231 network (ONNX) in chunks. Rebuild with `npm run split-model -- <r231.onnx>`.
+- `docs/`: the results write-up and example screenshots. `research/`: reports, result tables and scoring scripts (they need the TCIA data, which is not included).
 - `scripts/`: sync and model split helpers.
-- `src/*.worker.js`: the outline and lung model workers.
 
-## Data
-Practice scans are public: The Cancer Imaging Archive, RIDER Lung CT and RIDER-LungCT-Seg. No scans are stored in this repository; load a DICOM folder from disk.
-
-See `NOTICE.md` for credits and licences.
-
-**Fill between (brush tools):** fix a few slices with the brush or eraser, then press **F** or the button to fill the slices between the first and last edited slice by shape interpolation (in tests, outlining every third slice kept Dice 0.94 against the expert outline). It replaces what is between, so edit the slices where the shape changes; Undo reverts it, and the edit trail logs it.
-
-## Edit trail
-The list button in the header opens the **edit trail** of the open scan: every click, drag resize, tolerance change, brush add or erase, undo, clear, match proposal, saved image and row, in order, with the active time and the volume after each step. A summary per tumour counts them and shows how a matched proposal was handled (accepted as proposed, or edited with how many edits). Add a note to label an edge case ("chest wall leak, erased"); the camera button in the toolbar saves the slice with its outline as a PNG so a correction can be shown before and after. The trail is kept in the browser per scan and exports to CSV.
-
-## Follow-up matching
-With a follow-up scan open, **Match to baseline** (header) asks for the baseline scan's folder (it needs the outline you saved there in this browser), runs the lung model on it, and proposes where the same tumour is on the open scan (lung registration, then a local image match). The proposal appears as a new tumour, flagged **Confident** or **Uncertain** in the panel and in the row's Match status; check the location and fix it with the drag or brush. On same-day test-retest pairs the seed hit the expert outline 28 of 28 times (see `notes/opus_match_report.md`); months-apart scans are untested.
-
-**Paste baseline rows:** the sheet header has a "Paste baseline rows" button. Paste rows copied from your sheet (tab- or comma-separated, header optional); they show greyed in the table, are used for matching (the follow-up takes Nodule ID, Lobe and Type from the baseline row of the same patient, scan date and nodule, and the timepoint moves to the next Follow-up), and are not included in Copy rows or CSV.
-
-## Deploy (GitHub Pages)
-Push to a GitHub repository whose default branch is `main`, then in Settings > Pages choose "GitHub Actions". `.github/workflows/pages.yml` builds with `BASE=/<repo>/` and publishes `dist`. The site is static: scans are read in the browser and never uploaded. Locally, `npm run build` uses base `/`.
+## Credits and licences
+LungMask R231 (Hofmanninger et al., Apache-2.0); TCIA RIDER Lung CT and RIDER-LungCT-Seg (CC BY, attribute); Inter font (OFL); React, ONNX Runtime Web, dicom-parser and Vite (MIT). See [NOTICE.md](NOTICE.md).
