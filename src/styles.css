@@ -321,3 +321,7 @@ tr.imported td { color: var(--muted); background: #f4efe6; }
 .ttable th { overflow: visible; }
 .trailpanel > .ttable td:last-child { white-space: normal; min-width: 120px; }
 .trailscroll .ttable td:nth-child(4) { min-width: 240px; }
+
+/* narrow windows: keep the header inside the screen, and the brush options above the right panel */
+.toolbar { z-index: 8; }
+@media (max-width: 700px) { .topbar { gap: 8px; padding: 0 8px; } .lungchip .bar { display: none; } }
