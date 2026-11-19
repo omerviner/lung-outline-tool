@@ -330,3 +330,6 @@ tr.imported td { color: var(--muted); background: #f4efe6; }
 button:focus-visible, select:focus-visible, input:focus-visible, label.btn:focus-within { outline: 2px solid var(--deep); outline-offset: 2px; }
 .stage button:focus-visible { outline-color: var(--ivory); box-shadow: 0 0 0 4px var(--deep); }
 td input.cell::placeholder { color: #8a7a60; }
+
+/* short messages (copied, errors, storage) shown over the stage without replacing the scan info */
+.notice { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: min(560px, calc(100% - 28px)); padding: 7px 12px; font-size: .8rem; line-height: 1.35; color: var(--ink); background: var(--cream); border: 1px solid var(--sand); border-radius: 10px; box-shadow: 0 4px 16px rgba(20,45,48,.35); z-index: 9; }

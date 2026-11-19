@@ -44,7 +44,8 @@ function rleDecode(runs, z0, total, sl) {
 }
 const rleVoxels = (runs) => runs.reduce((s, n, k) => s + (k % 2 ? n : 0), 0);
 const store = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
+let saveFailed = null; // set by App: tells the user when the browser refuses to store something
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { if (saveFailed) saveFailed(); } };
 
 const SHORTCUTS = [ // [group, [[keys, what it does], ...]]; every key is its own chip
   ['Tools', [[['O', 'B', 'E'], 'Outline, brush, erase'], [['[', ']'], 'Brush size'], [['{', '}'], 'Brush depth (slices)'], [[',', '.'], 'Tolerance (changes the selected area)'], [['Shift'], 'Hold to erase with the brush']]],
@@ -175,6 +176,10 @@ async function filesFromDrop(items) {
 export default function App() {
   const [series, setSeries] = useState(null);
   const [status, setStatus] = useState('');
+  const [notice, setNotice] = useState(''), noticeT = useRef(0);
+  const toast = useCallback((text) => { setNotice(text); clearTimeout(noticeT.current); if (text) noticeT.current = setTimeout(() => setNotice(''), 7000); }, []);
+  const say = (text) => (seriesRef.current ? toast(text) : setStatus(text)); // a message must not replace the scan info once a scan is open
+  saveFailed = () => toast('The browser could not store your work (storage is full or blocked). Copy the rows out now.');
   const [slice, setSliceRaw] = useState(0);
   const [win, setWin] = useState('Lung');
   const [tool, setTool] = useState('outline');
@@ -503,6 +508,7 @@ export default function App() {
   const endGesture = () => { // a drag or a brush stroke has finished: put it in the edit trail
     if (dragInfo.current.on) { logRef.current('resize', `radius ${Math.round(dragInfo.current.mm)} mm`); dragInfo.current = { on: false, mm: 0 }; }
     const st = stroke.current, sr = seriesRef.current;
+    if (st && st.type === 'brush' && !st.idx.length && hist.current[hist.current.length - 1] === st) hist.current.pop(); // a stroke that changed nothing is not an undo step
     if (st && sr && st.type === 'brush' && !st.logged && st.idx.length) {
       st.logged = true;
       const sl = sr.gd[1] * sr.gd[2], zs = new Set(st.idx.map((i) => Math.floor(i / sl))), mm3 = Math.round((st.changed || 0) * sr.spDS[0] * sr.spDS[1] * sr.spDS[2]);
@@ -538,11 +544,12 @@ export default function App() {
   // ---- loading ----
   const openGroup = useCallback(async (best) => {
     setChooser(null);
-    setStatus(`Building volume from ${best.length} slices...`);
+    if (ol.current.key) saveTime(); // keep the time of the scan being left
+    say(`Building volume from ${best.length} slices...`);
     await new Promise((r) => setTimeout(r, 20));
     let v, ds;
     try { v = buildVolume(best); ds = downsample(v.vol, v.dims); } catch (err) { // for example mixed slice sizes or compressed pixel data
-      setStatus(`Could not build a scan from that folder: ${(err && err.message) || err}`);
+      say(`Could not build a scan from that folder: ${(err && err.message) || err}`);
       return;
     }
     const n = ds.v.length;
@@ -683,7 +690,7 @@ export default function App() {
   const loadFiles = useCallback(async (fileList, asBaseline = false) => {
     const files = Array.from(fileList);
     if (!files.length) return;
-    setStatus(`Reading ${files.length} files...`);
+    say(`Reading ${files.length} files...`);
     const groups = {};
     for (const f of files) {
       try {
@@ -696,10 +703,10 @@ export default function App() {
     }
     // series with enough slices to be a scan, thin ones first, then the one with most slices
     const all = Object.values(groups).sort((p, q) => (Number(q.thickness <= 1.3) - Number(p.thickness <= 1.3)) || q.bytes.length - p.bytes.length);
-    if (!all.length) { setStatus('No DICOM images found in that selection.'); return; }
+    if (!all.length) { say('No DICOM images found in that selection.'); return; }
     const cands = all.filter((g) => g.bytes.length >= 10);
-    if (asBaseline) { setStatus(''); await openBaseline((cands[0] || all[0]).bytes); return; }
-    if (cands.length > 1) { setStatus(''); setChooser({ groups: cands, sel: 0 }); return; } // several series: let the user pick
+    if (asBaseline) { say(''); await openBaseline((cands[0] || all[0]).bytes); return; }
+    if (cands.length > 1) { say(''); setChooser({ groups: cands, sel: 0 }); return; } // several series: let the user pick
     await openGroup((cands[0] || all[0]).bytes);
   }, [openGroup]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (import.meta.env.DEV) window.__loadFiles = loadFiles; }, [loadFiles]);
@@ -733,14 +740,14 @@ export default function App() {
   const edit = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const mine = rows.filter((r) => !r.imported); // rows pasted from the sheet are for matching only, not exported again
   const copy = async () => {
-    try { await navigator.clipboard.writeText(toTSV(mine, false)); setStatus(`Copied ${mine.length} rows: paste into the sheet.`); }
-    catch { setStatus('Could not copy to the clipboard here. Use CSV instead, or allow clipboard access for this page.'); }
+    try { await navigator.clipboard.writeText(toTSV(mine, false)); say(`Copied ${mine.length} rows: paste into the sheet.`); }
+    catch { say('Could not copy to the clipboard here. Use CSV instead, or allow clipboard access for this page.'); }
   };
   const importRows = () => {
     const { rows: add, skipped } = parseRows(pasteText);
-    if (!add.length) { setStatus(`No sheet rows found in the pasted text${skipped ? ` (${skipped} lines skipped: Patient ID and Nodule ID are needed)` : ''}.`); return; }
+    if (!add.length) { say(`No sheet rows found in the pasted text${skipped ? ` (${skipped} lines skipped: Patient ID and Nodule ID are needed)` : ''}.`); return; }
     setRows((rs) => [...rs, ...add]); setPasteOpen(false); setPasteText('');
-    setStatus(`Added ${add.length} baseline row${add.length > 1 ? 's' : ''} from your sheet${skipped ? ` (${skipped} skipped)` : ''}. They are used when matching and are not copied out again.`);
+    say(`Added ${add.length} baseline row${add.length > 1 ? 's' : ''} from your sheet${skipped ? ` (${skipped} skipped)` : ''}. They are used when matching and are not copied out again.`);
   };
   const download = () => {
     const a = document.createElement('a');
@@ -866,6 +873,7 @@ export default function App() {
                 {status.split(' · ').map((part, i) => <span key={i} className={i === 0 ? 'first' : ''}>{part}</span>)}
               </div>
             )}
+            {notice && <div className="notice" role="status">{notice}</div>}
             {warn && <div className="scanwarn" title={warn}><Icon name="alert" size={15} /> {warn}</div>}
             <div className="hintbar">{TOOLS.find((t) => t.id === tool).hint}</div>
 
@@ -958,7 +966,7 @@ export default function App() {
                 {olView.map((o) => (
                   <div key={o.id} className={`olchip ${o.id === activeId ? 'on' : ''}`}>
                     <button className="olpick" onClick={() => switchTo(o.id)} title="Open this outline"><b>{o.label}</b><span>{(o.id === activeId && m ? m.volumeMl : o.vol) ? `${mm3(o.id === activeId && m ? m.volumeMl : o.vol)} mm³` : 'empty'}</span></button>
-                    {olView.length > 1 && <button className="olx" aria-label={`Delete ${o.label}`} title="Delete this outline" onClick={() => removeOutline(o.id)}>×</button>}
+                    {olView.length > 1 && <button className="olx" aria-label={`Delete ${o.label}`} title="Delete this outline" onClick={() => { if (!(o.vol || (o.id === activeId && m)) || window.confirm(`Delete ${o.label}? Its outline will be lost.`)) removeOutline(o.id); }}>×</button>}
                   </div>
                 ))}
                 </div>
@@ -1052,7 +1060,7 @@ export default function App() {
           <button className="btn primary" disabled={!m} onClick={addRow}><Icon name="plus" size={15} /> Add row <kbd>Enter</kbd></button>
           <button className="btn" disabled={!mine.length} onClick={copy} aria-label="Copy rows" title="Copy rows: paste into the sheet"><Icon name="copy" size={15} /> <span className="lbl">Copy rows</span></button>
           <button className="btn" disabled={!mine.length} onClick={download} aria-label="Download CSV" title="Download the rows as CSV"><Icon name="download" size={15} /> <span className="lbl">CSV</span></button>
-          <button className="btn ghost" disabled={!rows.length} onClick={() => setRows([])} aria-label="Clear all rows" title="Clear all rows"><Icon name="trash" size={15} /> <span className="lbl">Clear</span></button>
+          <button className="btn ghost" disabled={!rows.length} onClick={() => { if (window.confirm(`Clear all ${rows.length} rows? This cannot be undone.`)) setRows([]); }} aria-label="Clear all rows" title="Clear all rows"><Icon name="trash" size={15} /> <span className="lbl">Clear</span></button>
         </div>
         <div className="tablewrap" ref={tableRef}>
           {rows.length ? (
