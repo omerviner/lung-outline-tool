@@ -121,7 +121,8 @@ const Viewer = forwardRef(function Viewer(
 
   // Space held = pan mode
   useEffect(() => {
-    const typing = (t) => t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && !['range', 'checkbox', 'file', 'button'].includes(t.type));
+    // Space belongs to a focused control (buttons, checkboxes, text fields, selects); only elsewhere it means pan
+    const typing = (t) => ['TEXTAREA', 'SELECT', 'INPUT', 'BUTTON'].includes(t.tagName);
     const dn = (e) => { if (e.code === 'Space' && !typing(e.target)) { e.preventDefault(); space.current = true; setSpaceHeld(true); } };
     const up = (e) => { if (e.code === 'Space') { space.current = false; setSpaceHeld(false); } };
     window.addEventListener('keydown', dn); window.addEventListener('keyup', up);
