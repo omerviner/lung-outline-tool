@@ -536,8 +536,12 @@ export default function App() {
     setChooser(null);
     setStatus(`Building volume from ${best.length} slices...`);
     await new Promise((r) => setTimeout(r, 20));
-    const v = buildVolume(best);
-    const ds = downsample(v.vol, v.dims), n = ds.v.length;
+    let v, ds;
+    try { v = buildVolume(best); ds = downsample(v.vol, v.dims); } catch (err) { // for example mixed slice sizes or compressed pixel data
+      setStatus(`Could not build a scan from that folder: ${(err && err.message) || err}`);
+      return;
+    }
+    const n = ds.v.length;
     const spDS = [v.spacing[0], v.spacing[1] * 2, v.spacing[2] * 2];
     L.current = { base: new Uint8Array(n), add: new Uint8Array(n), erase: new Uint8Array(n), mask: new Uint8Array(n), zr: null, baseZr: null, addZr: null, edited: false };
     hist.current = []; last.current = null; resetPending();
