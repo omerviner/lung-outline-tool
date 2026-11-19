@@ -290,11 +290,16 @@ tbody tr { scroll-snap-align: start; }
 .timepanel { width: min(620px, calc(100vw - 24px)); }
 .timepanel .tnote { margin: 0; color: var(--muted); line-height: 1.4; }
 .timepanel .tsum { margin: 0; font-weight: 600; color: var(--deep); }
-.ttable { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.ttable { width: 100%; table-layout: auto; border-collapse: collapse; font-size: .78rem; }
 .ttable th, .ttable td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--sand); white-space: nowrap; }
 .ttable th:first-child, .ttable td:first-child { text-align: left; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
 .ttable tr.now td { font-weight: 600; }
-.ttable td:first-child { min-width: 170px; }
+.timepanel:not(.trailpanel) .ttable td:first-child { min-width: 170px; max-width: none; white-space: normal; overflow-wrap: anywhere; }
+/* the sheet's table rules (sticky header, 34px rows) must not leak into these small tables */
+.ttable thead th { position: static; height: auto; background: transparent; border-bottom: 1px solid var(--sand); color: var(--deep); text-overflow: clip; }
+.ttable td { height: auto; }
+.trailscroll .ttable thead th { position: sticky; top: 0; background: var(--ivory); }
+.trailpanel > .ttable th:last-child, .trailscroll .ttable th:nth-child(3), .trailscroll .ttable th:nth-child(4) { text-align: left; }
 
 .matchnote { font-size: .74rem; line-height: 1.35; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--sand); background: var(--ivory); }
 .matchnote.ok { border-color: var(--deep); }
@@ -310,3 +315,9 @@ tr.imported td { color: var(--muted); background: #f4efe6; }
 .trailnote input { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--sand); border-radius: 8px; background: var(--ivory); padding: 0 8px; color: var(--ink); font: inherit; font-size: .8rem; }
 .toolopts .btn { width: 100%; height: auto; white-space: normal; text-align: center; justify-content: center; line-height: 1.25; padding: 6px 8px; font-size: .78rem; }
 .toolopts .hint { overflow-wrap: anywhere; }
+
+/* edit trail: wider so the summary headings and the detail text fit */
+.trailpanel { width: min(720px, calc(100vw - 24px)); }
+.ttable th { overflow: visible; }
+.trailpanel > .ttable td:last-child { white-space: normal; min-width: 120px; }
+.trailscroll .ttable td:nth-child(4) { min-width: 240px; }
