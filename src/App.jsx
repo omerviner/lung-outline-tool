@@ -402,12 +402,18 @@ export default function App() {
   useEffect(() => {
     const w = new OutlineWorker();
     workerRef.current = w;
+    w.onerror = () => { inflight.current = false; queued.current = null; setComputing(false); setInfo('The outline worker stopped. Reload the page to continue.'); };
     w.onmessage = (e) => {
       const m = e.data;
       if (m.type !== 'result') return;
       inflight.current = m.id < reqId.current; // a newer request may already be running (after a reset)
       if (m.id < minId.current) { // result for an outline or scan that was closed: drop it, but keep the request that is waiting
         if (inflight.current) return;
+        if (queued.current) { const q = queued.current; queued.current = null; post(q); } else setComputing(false);
+        return;
+      }
+      if (m.error) { // the outline could not be computed: keep what is there and go on with the next request
+        setInfo(`Outline failed: ${m.error}`);
         if (queued.current) { const q = queued.current; queued.current = null; post(q); } else setComputing(false);
         return;
       }

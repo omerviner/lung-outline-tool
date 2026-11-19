@@ -13,10 +13,14 @@ self.onmessage = (e) => {
   } else if (m.type === 'lung') {
     lung = new Uint8Array(m.lung);
   } else if (m.type === 'outline') {
-    const t0 = performance.now(), haveLung = !!lung;
-    // boxOnly: the result is a small box around the outline, not a copy of the whole volume
-    const r = outlineFromClick(v, gd, sp, haveLung ? lung : ones, m.seed, { ...m.opts, useLung: haveLung, boxOnly: true });
-    const box = r.box ? { origin: r.box.origin, dims: r.box.dims, data: r.box.data } : null;
-    self.postMessage({ type: 'result', id: m.id, box, voxels: r.voxels, zr: r.zr, ms: Math.round(performance.now() - t0), radiusMm: r.radiusMm, usedLung: haveLung }, box ? [box.data.buffer] : []);
+    try {
+      const t0 = performance.now(), haveLung = !!lung;
+      // boxOnly: the result is a small box around the outline, not a copy of the whole volume
+      const r = outlineFromClick(v, gd, sp, haveLung ? lung : ones, m.seed, { ...m.opts, useLung: haveLung, boxOnly: true });
+      const box = r.box ? { origin: r.box.origin, dims: r.box.dims, data: r.box.data } : null;
+      self.postMessage({ type: 'result', id: m.id, box, voxels: r.voxels, zr: r.zr, ms: Math.round(performance.now() - t0), radiusMm: r.radiusMm, usedLung: haveLung }, box ? [box.data.buffer] : []);
+    } catch (err) { // always answer, or the page waits for this request forever
+      self.postMessage({ type: 'result', id: m.id, error: String((err && err.message) || err) });
+    }
   }
 };
