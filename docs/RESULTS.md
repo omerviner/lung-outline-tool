@@ -39,6 +39,8 @@ The result survives shifts up to 80 mm and rotations up to 15 degrees of the fol
 
 **Speed.** Drag preview about 11 ms median, exact outline 0.4 to 0.6 s. The lung model run is in the background and does not block clicking.
 
+**Example of a manual fix (developer run, not the lab's).** On practice scan RIDER-2016615262, a chest-wall case from the failure list: the first click gave 92,814 mm3 running along the chest wall (before the lung limit was ready), the lung limit plus two brush erases brought it to 61,405 mm3, and the edit trail logged each step with the volume after it. Screenshots: `docs/examples/` (first click, after the brush, the trail). One case; it does not show how often this happens.
+
 ## What fails or is weak (plainly)
 - **About 1 click in 6 leaks** (over 2x the expert volume): small nodules beside vessels, tumours against the chest wall, spine or mediastinum. The drag inward or the brush fixes it, but it costs time. 15% of held-out clicks are still below Dice 0.5.
 - **Small nodules under 2 mL are worse than the first version** (median Dice 0.73 against 0.79; one in three needs fixing). An attempted size-aware fix helped the tuning half and hurt the overall median, so it was not adopted.
