@@ -105,8 +105,8 @@ function TimePanel({ log, nowKey, liveMin, onClear }) {
   const sumHand = done.reduce((s, r) => s + r.hand, 0), sumTool = done.reduce((s, r) => s + r.total, 0);
   const dash = (v) => (v == null ? '–' : fmt1(v));
   const csv = () => {
-    const head = 'Scan,Tumours,Finding (min),Outline and rows (min),Total with tool (min),By hand, modelled (min),Saved (min)';
-    const body = list.map((r) => [`"${r.label}"`, r.n, dash(r.find), dash(r.work), fmt1(r.total), dash(r.hand), dash(r.saved)].join(','));
+    const head = 'Scan,Tumours,Finding (min),Outline and rows (min),Total with tool (min),"By hand, modelled (min)",Saved (min)';
+    const body = list.map((r) => [`"${String(r.label).replace(/"/g, '""')}"`, r.n, dash(r.find), dash(r.work), fmt1(r.total), dash(r.hand), dash(r.saved)].join(','));
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([[head, ...body].join('\n')], { type: 'text/csv' })); a.download = 'time_log.csv'; a.click();
   };
