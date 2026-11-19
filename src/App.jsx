@@ -350,7 +350,7 @@ export default function App() {
     }
     setOthers(u);
     setOlView(o.items.map((it) => ({ id: it.id, label: it.label, vol: it.vol }))); setActiveId(o.active); };
-  const olPersist = () => { const o = ol.current; if (o.key) save(`outlines:${o.key}`, { next: o.next, items: o.items.map(({ id, label, zr, rle }) => ({ id, label, zr, rle })) }); };
+  const olPersist = () => { const o = ol.current; if (o.key) save(`outlines:${o.key}`, { next: o.next, items: o.items.map(({ id, label, zr, rle, match }) => ({ id, label, zr, rle, match })) }); };
   const snapshot = () => { // copy the live outline into its saved entry
     const o = ol.current, s = seriesRef.current, l = L.current, it = o.items.find((x) => x.id === o.active);
     if (!it || !s || !l.mask) return;
@@ -382,8 +382,9 @@ export default function App() {
     const o = ol.current;
     o.items = o.items.filter((x) => x.id !== id);
     if (id === o.active) {
+      stampTrail();
       if (!o.items.length) { o.items.push({ id: o.next++, label: 'N1', zr: null, rle: null, vol: 0 }); }
-      o.active = o.items[0].id; resetPending(); loadEntry(o.items[0]); setInfo(''); bump();
+      keysRef.current.clear(); setKeyN(0); o.active = o.items[0].id; resetPending(); loadEntry(o.items[0]); setInfo(''); bump();
     }
     olPersist(); olSync();
   };
