@@ -732,7 +732,10 @@ export default function App() {
   };
   const edit = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const mine = rows.filter((r) => !r.imported); // rows pasted from the sheet are for matching only, not exported again
-  const copy = async () => { await navigator.clipboard.writeText(toTSV(mine, false)); setStatus(`Copied ${mine.length} rows: paste into the sheet.`); };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(toTSV(mine, false)); setStatus(`Copied ${mine.length} rows: paste into the sheet.`); }
+    catch { setStatus('Could not copy to the clipboard here. Use CSV instead, or allow clipboard access for this page.'); }
+  };
   const importRows = () => {
     const { rows: add, skipped } = parseRows(pasteText);
     if (!add.length) { setStatus(`No sheet rows found in the pasted text${skipped ? ` (${skipped} lines skipped: Patient ID and Nodule ID are needed)` : ''}.`); return; }
