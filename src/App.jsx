@@ -838,12 +838,12 @@ export default function App() {
         {series && <LungChip s={lungState} />}
         {series && (
           <span className={`chip timer ${paused ? 'paused' : ''}`}>
-            <button className="timebtn" title="Time on this scan: open the time log" aria-label="Open the time log" onClick={() => setTimeOpen((o) => !o)}><Icon name="clock" size={16} /> {minutes.toFixed(1)} min{paused ? ' · paused' : ''}</button>
+            <button className="timebtn" title="Time on this scan: open the time log" aria-label="Open the time log" onClick={() => { setHelpOpen(false); setTrailOpen(false); setWlOpen(false); setTimeOpen((o) => !o); }}><Icon name="clock" size={16} /> {minutes.toFixed(1)} min{paused ? ' · paused' : ''}</button>
             <button className="timebtn pausebtn" title={paused ? 'Resume the timer (P)' : 'Pause the timer (P)'} aria-label={paused ? 'Resume the timer' : 'Pause the timer'} onClick={togglePause}><Icon name={paused ? 'play' : 'pause'} size={14} /></button>
           </span>
         )}
-        {series && <button className={`btn helpbtn trailbtn ${trailOpen ? 'on' : ''}`} aria-label="Edit trail" title="Edit trail: every correction on this scan" onClick={() => setTrailOpen((o) => !o)}><Icon name="list" size={15} /></button>}
-        <button className="btn helpbtn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => setHelpOpen((o) => !o)}><Icon name="help" size={15} /></button>
+        {series && <button className={`btn helpbtn trailbtn ${trailOpen ? 'on' : ''}`} aria-label="Edit trail" title="Edit trail: every correction on this scan" onClick={() => { setHelpOpen(false); setTimeOpen(false); setWlOpen(false); setTrailOpen((o) => !o); }}><Icon name="list" size={15} /></button>}
+        <button className="btn helpbtn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" onClick={() => { setTimeOpen(false); setTrailOpen(false); setWlOpen(false); setHelpOpen((o) => !o); }}><Icon name="help" size={15} /></button>
         {series && <FolderPicker onFiles={(f) => loadFiles(f, true)} label="Match to baseline" />}
         {series && <FolderPicker onFiles={loadFiles} label="Open folder" />}
         {trailOpen && <TrailPanel events={trailRef.current} scanLabel={ol.current.label || 'This scan'} onNote={(t) => { logEdit('note', t); }} onClear={() => { trailRef.current = []; trailSave(); setTrailN((n) => n + 1); }} />}
@@ -890,9 +890,7 @@ export default function App() {
                 <div className="seg">{Object.keys(WINDOWS).map((w) => <button key={w} className={win === w && !wl ? 'on' : ''} aria-label={`${w} window`} onClick={() => { setWl(null); setWin(w); }}>{w}</button>)}</div>
                 <Tip down title="Display window" keys="W" text="Lung shows the airways and nodules; Soft shows the chest wall and mediastinum." />
               </div>
-              <div className="toolwrap"><button className={`vb wlbtn ${wl || wlOpen ? 'on' : ''}`} aria-label="Adjust level and width" onClick={() => setWlOpen((o) => !o)}><Icon name="sliders" size={18} /></button><Tip down title="Level and width" text="Fine-tune the brightness window by hand." /></div>
-            </div>
-
+              <div className="toolwrap"><button className={`vb wlbtn ${wl || wlOpen ? 'on' : ''}`} aria-label="Adjust level and width" onClick={() => { setHelpOpen(false); setTimeOpen(false); setTrailOpen(false); setWlOpen((o) => !o); }}><Icon name="sliders" size={18} /></button><Tip down title="Level and width" text="Fine-tune the brightness window by hand." />
             {wlOpen && (
               <div className="floating wlpanel" role="dialog" aria-label="Level and width">
                 <div className="optlabel">Level <b>{Math.round(winVal.level)} HU</b></div>
@@ -902,6 +900,8 @@ export default function App() {
                 <button className="btn tight" disabled={!wl} onClick={() => setWl(null)}>Back to {win}</button>
               </div>
             )}
+              </div>
+            </div>
 
             <nav className="floating toolbar">
               {TOOLS.map((t) => (

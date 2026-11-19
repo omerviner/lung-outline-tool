@@ -272,7 +272,7 @@ tbody tr { scroll-snap-align: start; }
 .vslider:focus-visible { outline: 2px solid var(--teal); outline-offset: 4px; border-radius: 4px; }
 
 /* manual window, several outlines, pausable timer, time log */
-.wlpanel { left: 14px; top: 62px; width: 220px; padding: 10px 12px; display: grid; gap: 6px; z-index: 6; }
+.wlpanel { left: auto; right: 0; top: calc(100% + 12px); width: 220px; padding: 10px 12px; display: grid; gap: 6px; z-index: 6; }
 .wlpanel input[type=range] { width: 100%; accent-color: var(--deep); }
 .wlpanel .optlabel { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); }
 .timer { gap: 2px; }
