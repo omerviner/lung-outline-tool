@@ -325,7 +325,7 @@ export default function App() {
       l.base = e.base; l.add = e.add || new Uint8Array(e.base.length); l.erase = e.erase || new Uint8Array(e.base.length);
       l.edited = !!e.add; l.baseZr = e.baseZr; l.addZr = e.addZr; l.zr = joinZ(l.baseZr, l.addZr); last.current = e.last; recomposite();
     }
-    logRef.current('undo', e.type === 'brush' ? 'undid a brush stroke' : 'undid the last outline change'); setInfo('Undid the last change.'); bump();
+    logRef.current('undo', e.type === 'brush' ? (e.fill ? 'undid the fill between slices' : 'undid a brush stroke') : 'undid the last outline change'); setInfo('Undid the last change.'); bump();
   }, [bump]);
 
   const clearAll = () => {
@@ -487,7 +487,7 @@ export default function App() {
     const tmp = l.mask.slice(), n = interpolateSlices(tmp, s.gd, s.spDS, keys);
     if (!n) { setInfo('The edited slices are next to each other: nothing between them to fill.'); return; }
     const sl = s.gd[1] * s.gd[2], z0 = keys[0] + 1, z1 = keys[keys.length - 1] - 1;
-    const st = { type: 'brush', idx: [], a: [], e: [] };
+    const st = { type: 'brush', fill: true, idx: [], a: [], e: [] };
     for (let i = z0 * sl; i < (z1 + 1) * sl; i++) {
       if (tmp[i] === l.mask[i]) continue;
       st.idx.push(i); st.a.push(l.add[i]); st.e.push(l.erase[i]);
@@ -505,9 +505,10 @@ export default function App() {
     const st = stroke.current, sr = seriesRef.current;
     if (st && sr && st.type === 'brush' && !st.logged && st.idx.length) {
       st.logged = true;
-      const sl = sr.gd[1] * sr.gd[2], zs = new Set(st.idx.map((i) => Math.floor(i / sl))), mm3 = Math.round(st.idx.length * sr.spDS[0] * sr.spDS[1] * sr.spDS[2]);
+      const sl = sr.gd[1] * sr.gd[2], zs = new Set(st.idx.map((i) => Math.floor(i / sl))), mm3 = Math.round((st.changed || 0) * sr.spDS[0] * sr.spDS[1] * sr.spDS[2]);
       zs.forEach((z) => keysRef.current.add(z)); setKeyN(keysRef.current.size);
-      logRef.current(st.erase ? 'erase' : 'brush', `${st.erase ? 'erased' : 'added'} about ${mm3} mm³ on ${zs.size} slice${zs.size > 1 ? 's' : ''}`);
+      const on = `on ${zs.size} slice${zs.size > 1 ? 's' : ''}`;
+      logRef.current(st.erase ? 'erase' : 'brush', mm3 ? `${st.erase ? 'erased' : 'added'} about ${mm3} mm³ ${on}` : `${st.erase ? 'erased' : 'painted'} ${on}, no change in volume`);
     }
   };
 
@@ -525,7 +526,9 @@ export default function App() {
           const i = (zz * ny + yy) * nx + xx;
           if (l.add[i] === a1 && l.erase[i] === e1) continue;
           if (st) { st.idx.push(i); st.a.push(l.add[i]); st.e.push(l.erase[i]); }
+          const was = l.mask[i];
           l.add[i] = a1; l.erase[i] = e1; l.mask[i] = (l.base[i] && !e1) || a1 ? 1 : 0;
+          if (st && l.mask[i] !== was) st.changed = (st.changed || 0) + 1; // voxels that really joined or left the outline
         }
     l.edited = true;
     if (!erase) { l.addZr = unionZ(l.addZr, z0, z1); l.zr = joinZ(l.baseZr, l.addZr); }
