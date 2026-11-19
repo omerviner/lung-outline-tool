@@ -405,8 +405,12 @@ export default function App() {
     w.onmessage = (e) => {
       const m = e.data;
       if (m.type !== 'result') return;
-      inflight.current = false;
-      if (m.id < minId.current) { if (!queued.current) setComputing(false); return; } // result for an outline that was closed
+      inflight.current = m.id < reqId.current; // a newer request may already be running (after a reset)
+      if (m.id < minId.current) { // result for an outline or scan that was closed: drop it, but keep the request that is waiting
+        if (inflight.current) return;
+        if (queued.current) { const q = queued.current; queued.current = null; post(q); } else setComputing(false);
+        return;
+      }
       const l = L.current;
       if (l.mask) {
         const prevZr = l.baseZr, [, ny, nx] = seriesRef.current.gd, sl = ny * nx; // slices that held the previous outline must be cleared too
@@ -530,7 +534,7 @@ export default function App() {
     const ds = downsample(v.vol, v.dims), n = ds.v.length;
     const spDS = [v.spacing[0], v.spacing[1] * 2, v.spacing[2] * 2];
     L.current = { base: new Uint8Array(n), add: new Uint8Array(n), erase: new Uint8Array(n), mask: new Uint8Array(n), zr: null, baseZr: null, addZr: null, edited: false };
-    hist.current = []; last.current = null; queued.current = null; inflight.current = false; setComputing(false);
+    hist.current = []; last.current = null; resetPending();
     dsRef.current = { v: ds.v.slice(), gd: ds.dims, sp: spDS }; lungRef.current = null;
     workerRef.current.postMessage({ type: 'init', v: ds.v.buffer, gd: ds.dims, sp: spDS }, [ds.v.buffer]);
     // lung model in the background: outlines work at once, and are upgraded when the lung limit is ready
