@@ -242,8 +242,8 @@ export default function App() {
   const elapsedMs = () => clock.current.ms + (clock.current.since ? Date.now() - clock.current.since : 0);
   const trailSave = () => { const k = ol.current.key; if (k) save(`trail:${k}`, trailRef.current.slice(-1500)); };
   const stampTrail = () => { // give new events the volume and axes of the outline as they stand now
-    const mm = mRef.current; let ch = false;
-    for (const e of trailRef.current) if (e.vol == null) { e.vol = mm ? mm.volumeMl * 1000 : 0; e.long = mm ? mm.longMm : null; e.short = mm ? mm.shortMm : null; ch = true; }
+    const mm = mRef.current; let ch = false; // a proposed match waits until its outline exists
+    for (const e of trailRef.current) if (e.vol == null && !(e.kind === 'match' && !mm)) { e.vol = mm ? mm.volumeMl * 1000 : 0; e.long = mm ? mm.longMm : null; e.short = mm ? mm.shortMm : null; ch = true; }
     if (ch) { trailSave(); setTrailN((n) => n + 1); }
   };
   const logEdit = (kind, detail = '') => {
