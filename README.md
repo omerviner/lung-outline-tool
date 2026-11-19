@@ -4,6 +4,10 @@ Click a tumour on a lung CT and get an editable 3D outline with live volume and 
 
 **Live:** https://omerviner.github.io/lung-outline-tool/ (Chrome or Edge recommended)
 
+<img src="docs/screenshots/click_outline.jpg" alt="One click on a tumour gives a 3D outline with volume in mm³ and long and short axes" width="900">
+
+*One click: the outline, volume (mm³) and axes appear at once. Practice scan from TCIA RIDER Lung CT.*
+
 Built as a prototype for a simulated thoracic oncology research lab, to cut the manual time spent outlining and measuring lung tumours. **Research use only. Not a medical device; no clinical claims.**
 
 - **Results:** [docs/RESULTS.md](docs/RESULTS.md): what works, what fails, and how the time saved is measured (modelled, plus the lab contact's stated runs; not stopwatch measurements).
@@ -17,6 +21,10 @@ Built as a prototype for a simulated thoracic oncology research lab, to cut the 
 - **Follow-up matching:** propose the tumour on a later scan from a baseline, with Paste baseline rows to carry over nodule ID, lobe and type.
 - **Edit trail and time log:** every correction with the volume after it, and active minutes per scan, both exportable.
 - **Lung model in the browser** (LungMask R231 via ONNX Runtime Web) keeps outlines inside the lung.
+
+<img src="docs/screenshots/sheet_row.jpg" alt="Pressing Enter fills a sheet row in the lab's columns, volume in mm3" width="900">
+
+*Enter adds a row in the lab's columns (volume in mm³, dates YYYY-MM-DD, slice from 1).*
 
 ## Quick start
 1. Open the live link, or run locally (below).
@@ -35,6 +43,10 @@ Practice scans are public: TCIA "RIDER Lung CT" (doi 10.7937/k9/tcia.2015.u1x8a5
 
 ### Edit trail
 The list button in the header opens the trail of the open scan: every click, drag resize, tolerance change, brush add or erase, undo, clear, match proposal, saved image and row, in order, with the active time and the volume after each step. A summary per tumour shows the counts and how a matched proposal was handled (accepted as proposed, or edited). Add a note to label an edge case; the camera button saves the slice with its outline as a PNG. Kept in the browser per scan; exports to CSV.
+
+<img src="docs/examples/example_2_after_brush.jpg" alt="A chest-wall case after two brush erases, 61,405 mm³" width="450"> <img src="docs/examples/example_3_edit_trail.jpg" alt="The edit trail listing the click and two brush erases with the volume after each step" width="450">
+
+*Developer example on practice scan RIDER-2016615262 (a chest-wall case): the outline after the lung limit and two brush erases, and the edit trail that recorded each step. Not from the lab's runs.*
 
 ### Follow-up matching
 With a follow-up scan open, **Match to baseline** (header) asks for the baseline scan's folder (it needs the outline you saved there in this browser), runs the lung model on it, and proposes where the same tumour is on the open scan (lung registration, then a local image match). The proposal appears as a new tumour flagged **Confident** or **Uncertain**, also in the row's Match status; check the place and fix it with the drag or brush. On same-day test-retest pairs the proposed point hit the expert outline 28 of 28 times (see [research/reports/opus_match_report.md](research/reports/opus_match_report.md)); months-apart scans are untested.
