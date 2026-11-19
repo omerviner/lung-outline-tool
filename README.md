@@ -44,7 +44,12 @@ Practice scans are public: TCIA "RIDER Lung CT" (doi 10.7937/k9/tcia.2015.u1x8a5
 ### Edit trail
 The list button in the header opens the trail of the open scan: every click, drag resize, tolerance change, brush add or erase, undo, clear, match proposal, saved image and row, in order, with the active time and the volume after each step. A summary per tumour shows the counts and how a matched proposal was handled (accepted as proposed, or edited). Add a note to label an edge case; the camera button saves the slice with its outline as a PNG. Kept in the browser per scan; exports to CSV.
 
-<img src="docs/examples/example_2_after_brush.jpg" alt="A chest-wall case after two brush erases, 61,405 mm³" width="450"> <img src="docs/examples/example_3_edit_trail.jpg" alt="The edit trail listing the click and two brush erases with the volume after each step" width="450">
+<table>
+<tr>
+<td width="50%"><img src="docs/examples/example_2_after_brush.jpg" alt="A chest-wall case after two brush erases, 61,405 mm³" width="100%"></td>
+<td width="50%"><img src="docs/examples/example_3_edit_trail.jpg" alt="The edit trail listing the click and two brush erases with the volume after each step" width="100%"></td>
+</tr>
+</table>
 
 *Developer example on practice scan RIDER-2016615262 (a chest-wall case): the outline after the lung limit and two brush erases, and the edit trail that recorded each step. Not from the lab's runs.*
 
