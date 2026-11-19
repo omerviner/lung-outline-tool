@@ -18,7 +18,11 @@ Data for testing: TCIA RIDER Lung CT and RIDER-LungCT-Seg (CC BY). Model: LungMa
 - **Time:** the header timer counts active minutes on the scan (`P` pauses). Click it for the time log: per scan, finding, outline and rows, total, and the by-hand model, with a CSV download.
 - **Rows:** `Enter` adds a row in the lab's 18-column order; **Copy rows** pastes into Excel, **CSV** downloads. Lobe, type, solid component, match status, nodule ID and notes are editable in the table.
 
+## Try it with practice data
+The practice scans are public: TCIA "RIDER Lung CT" (doi 10.7937/k9/tcia.2015.u1x8a5nr) and the expert outlines "RIDER-LungCT-Seg" (doi 10.7937/tcia.2020.jit9grk8), downloaded with the TCIA Data Retriever (CC BY, attribute). Each scan is a folder of DICOM files; choose one such folder with **Open scan folder**. Nothing is uploaded.
+
 ## Run locally
+Needs Node 18 or newer.
 ```bash
 npm install
 npm run dev        # http://localhost:5173
@@ -33,7 +37,7 @@ Deploy `dist/` to any static host (about 133 MB: the lung model 111 MB and the O
 ## Lung model
 After a scan loads, the LungMask model (ONNX, `public/model/`) runs in a background worker and gives the outline its lung limit. Outlines work straight away without it, with lower accuracy (the status line says "without lung limit"), and are upgraded automatically when the model finishes.
 - **WebGPU** (recent Chrome or Edge): about 30 s per scan.
-- **No WebGPU:** falls back to single-threaded CPU, which is much slower (minutes). Multi-threaded WebAssembly is not used: initialising it inside a worker hangs.
+- **No WebGPU:** falls back to single-threaded CPU on every third slice: about 3 minutes per 236-slice scan (twice when matching to a baseline). Multi-threaded WebAssembly is not used: initialising it inside a worker hangs.
 - `?ep=wasm` or `?ep=webgpu` in the address forces one backend (for testing).
 
 ## Layout
