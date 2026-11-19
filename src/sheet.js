@@ -24,6 +24,20 @@ export function fmtDate(d) {
   return d && d.length === 8 ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : d || '';
 }
 
+/** Dates pasted from a sheet (2025/01/14, 20250114, 14/01/2025, 1/14/2025) as YYYY-MM-DD; anything unclear stays as typed. */
+export function normDate(v) {
+  const t = String(v || '').trim(); let m;
+  const iso = (y, mo, d) => `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  if ((m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(t))) return iso(m[1], m[2], m[3]);
+  if ((m = /^(\d{4})(\d{2})(\d{2})$/.exec(t))) return iso(m[1], m[2], m[3]);
+  if ((m = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(t))) {
+    const a = +m[1], b = +m[2];
+    if (a > 12 && b <= 12) return iso(m[3], b, a);
+    if (b > 12 && a <= 12) return iso(m[3], a, b);
+  }
+  return t;
+}
+
 export function makeRow({ meta, spacing, m, noduleId, timepoint, initials, minutes, includeVolume, matchStatus = '', lobe = '', type = '' }) {
   return {
     patientId: meta.patientId || '', date: fmtDate(meta.studyDate), timepoint, seriesNumber: meta.seriesNumber ?? '',
@@ -98,7 +112,7 @@ export function parseRows(text) {
     const cells = split(l), r = Object.fromEntries(COLUMNS.map(([k]) => [k, '']));
     cells.forEach((c, i) => { if (keys[i]) r[keys[i]] = c; });
     if (!r.patientId || !r.noduleId) { skipped++; continue; } // not a sheet row
-    rows.push({ ...r, imported: true });
+    rows.push({ ...r, date: normDate(r.date), imported: true });
   }
   return { rows, skipped };
 }
